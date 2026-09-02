@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1b5e20;
+  --color-primary-hover: #144718;
+  --color-primary-light: #e8f5e9;
+  --color-primary-muted: #2e7d32;
+
+  --color-accent: #84cc16;
+  --color-accent-hover: #65a30d;
+  --color-accent-light: #f7fee7;
+  --color-accent-glow: rgba(132, 204, 22, 0.35);
+
+  --color-deal: #f97316;
+  --color-deal-light: #fff7ed;
+  --color-deal-hover: #ea580c;
+
+  --color-bg-base: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f1f5f9;
+  --color-surface-muted: #f8fafc;
+
+  --color-text-main: #0f172a;
+  --color-text-muted: #64748b;
+  --color-text-light: #94a3b8;
+  --color-text-on-primary: #ffffff;
+  --color-text-on-accent: #0f172a;
+  --color-text-on-deal: #ffffff;
+
+  --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
+  --color-border-focus: #84cc16;
+
+  --color-success: #16a34a;
+  --color-warning: #eab308;
+  --color-error: #ef4444;
+
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+
+  /* Carved corner radius design tokens */
+  --radius-card: 1.75rem;
+  --radius-box: 1.5rem;
+  --radius-btn: 1.25rem;
+  --radius-badge: 1rem;
+
+  --shadow-subtle: 0 4px 14px rgba(0, 0, 0, 0.03);
+  --shadow-card: 0 12px 30px -8px rgba(27, 94, 32, 0.08);
+  --shadow-card-hover: 0 20px 40px -10px rgba(27, 94, 32, 0.16);
+  --shadow-drawer: -8px 0 35px rgba(0, 0, 0, 0.15);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg-base);
+    color: var(--color-text-main);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    padding-bottom: 5.5rem; /* space for mobile bottom nav */
+  }
+
+  @media (min-width: 768px) {
+    body {
+      padding-bottom: 0;
+    }
+  }
+}
+
+/* Custom scrollbars for horizontal category strips */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Glassmorphism helpers using semantic tokens */
+.glass-header {
+  background-color: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.glass-nav {
+  background-color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Carved corner box styling utility */
+.carved-box {
+  border-radius: 1.75rem;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.carved-btn {
+  border-radius: 1.25rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.carved-btn:active {
+  transform: scale(0.97);
+}
+
+/* Delivery Scooter Riding Animation Keyframes */
+@keyframes scooterBounce {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-2px) rotate(-1.5deg);
+  }
+}
+
+@keyframes windPuff {
+  0% {
+    opacity: 0.2;
+    transform: translateX(2px) scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-3px) scale(1.1);
+  }
+  100% {
+    opacity: 0.2;
+    transform: translateX(2px) scale(0.8);
+  }
+}
+
+@keyframes roadDash {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: -20px 0;
+  }
+}
+
+.animate-scooter {
+  animation: scooterBounce 0.5s infinite ease-in-out;
+}
+
+.animate-wind {
+  animation: windPuff 0.4s infinite ease-in-out;
+}
+
+.animated-road {
+  background-image: linear-gradient(90deg, rgba(255,255,255,0.4) 50%, transparent 50%);
+  background-size: 10px 2px;
+  animation: roadDash 0.6s linear infinite;
+}
+

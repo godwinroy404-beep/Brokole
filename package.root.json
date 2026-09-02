@@ -1,0 +1,19 @@
+{
+  "name": "brokole",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:web": "pnpm --filter @brokole/web dev",
+    "dev:admin": "pnpm --filter @brokole/admin dev",
+    "build": "pnpm -r build",
+    "db:start": "supabase start",
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push",
+    "db:types": "supabase gen types typescript --local > packages/domain/src/database.types.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
