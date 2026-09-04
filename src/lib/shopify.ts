@@ -1,4 +1,6 @@
 import { NutritionInfo } from './nutritionParser';
+import { fetchMenu, fetchMenuItemBySlug } from './menu';
+import { isApiConfigured } from './api';
 
 export interface ProductVariant {
   id: string;
@@ -35,6 +37,7 @@ export interface Product {
   nutrition: NutritionInfo;
   prepTime: string;
   isPopular?: boolean;
+  isAvailable?: boolean;
 }
 
 export interface ShopifyCartLine {
@@ -497,6 +500,11 @@ async function shopifyFetch<T>(query: string, variables: Record<string, any> = {
 }
 
 export async function fetchProducts(): Promise<Product[]> {
+  if (isApiConfigured) {
+    const apiProducts = await fetchMenu();
+    if (apiProducts.length > 0) return apiProducts;
+  }
+
   const query = `
     query getProducts {
       products(first: 20) {
@@ -589,6 +597,11 @@ export async function fetchProducts(): Promise<Product[]> {
 }
 
 export async function fetchProductByHandle(handle: string): Promise<Product | null> {
+  if (isApiConfigured) {
+    const apiProduct = await fetchMenuItemBySlug(handle);
+    if (apiProduct) return apiProduct;
+  }
+
   const query = `
     query getProduct($handle: String!) {
       product(handle: $handle) {

@@ -47,57 +47,7 @@ export const Route = createFileRoute('/kitchen')({
   component: KitchenPage,
 });
 
-// Mock Customer Data for Monitoring
-const INITIAL_CUSTOMERS = [
-  {
-    id: 'CUST-101',
-    name: 'Alex Morgan',
-    email: 'alex.morgan@example.com',
-    phone: '+91 98765 43210',
-    address: '42 Park Avenue, Koramangala 5th Block, Bengaluru, 560095',
-    dietary: ['High Protein', 'Gluten Free'],
-    ordersCount: 14,
-    totalSpent: 4186,
-    lastOrderDate: 'Today, 2:15 PM',
-    status: 'ACTIVE',
-  },
-  {
-    id: 'CUST-102',
-    name: 'Priya Sharma',
-    email: 'priya.s@healthlife.org',
-    phone: '+91 98123 76543',
-    address: '88 Indiranagar 100ft Road, Bengaluru, 560038',
-    dietary: ['Low Carb', 'Vegan'],
-    ordersCount: 8,
-    totalSpent: 2192,
-    lastOrderDate: 'Yesterday, 8:30 PM',
-    status: 'ACTIVE',
-  },
-  {
-    id: 'CUST-103',
-    name: 'Rohan Verma',
-    email: 'rohan.v@techstudio.io',
-    phone: '+91 97654 32109',
-    address: '15 HSR Layout Sector 1, Bengaluru, 560102',
-    dietary: ['High Protein', 'Keto Friendly'],
-    ordersCount: 22,
-    totalSpent: 7458,
-    lastOrderDate: 'Today, 11:45 AM',
-    status: 'VIP',
-  },
-  {
-    id: 'CUST-104',
-    name: 'Ananya Patel',
-    email: 'ananya.p@gmail.com',
-    phone: '+91 99887 66554',
-    address: '102 Whitefield Main Rd, Bengaluru, 560066',
-    dietary: ['Gluten Free'],
-    ordersCount: 5,
-    totalSpent: 1395,
-    lastOrderDate: '16 Aug 2026',
-    status: 'ACTIVE',
-  },
-];
+const INITIAL_CUSTOMERS: any[] = [];
 
 const PRESET_IMAGES = [
   { label: 'Mediterranean Hummus Bowl', url: '/images/hummus_bowl.png' },

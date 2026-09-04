@@ -20,10 +20,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   // Check if item is already in cart
   const itemInCart = cartItems.find((item) => item.product.id === product.id);
   const inCartQty = itemInCart ? itemInCart.quantity : 0;
+  const isAvailable = product.isAvailable !== false && (product.variants.length === 0 || product.variants.some((v) => v.availableForSale));
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!isAvailable) {
+      toast.error(`${product.title} is currently out of stock`);
+      return;
+    }
     addItem(product);
     toast.success(`Added ${product.title} to cart`, {
       description: `${product.nutrition.protein}g Protein | ${product.nutrition.calories} kcal`,
@@ -32,28 +37,30 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   };
 
   return (
-    <div className="group relative bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col justify-between carved-box">
+    <div className={`group relative bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 flex flex-col justify-between carved-box ${!isAvailable ? 'opacity-85' : ''}`}>
       
       {/* Product Image & Badges */}
-      <Link to="/product/$handle" params={{ handle: product.handle }} className="block relative aspect-4/3 overflow-hidden bg-[var(--color-surface-hover)] rounded-t-[1.65rem]">
+      <Link to="/product/$handle" params={{ handle: product.handle }} className="block relative aspect-4/3 overflow-hidden bg-neutral-900 rounded-t-[1.65rem]">
         <img
           src={product.featuredImage.url}
           alt={product.featuredImage.altText || product.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${isAvailable ? 'group-hover:scale-105' : 'grayscale-[30%]'}`}
           loading="lazy"
         />
 
-        {/* Popular / Deal Badge */}
-        {product.isPopular && (
-          <div className="absolute top-2.5 left-2.5 px-3 py-1 rounded-2xl bg-[var(--color-deal)] text-[var(--color-text-on-deal)] text-[10px] font-extrabold uppercase tracking-wider shadow-xs">
+        {/* Out of Stock or Popular Badge Top Left */}
+        {!isAvailable ? (
+          <div className="absolute top-2.5 left-2.5 px-3 py-1 rounded-2xl bg-amber-500 text-neutral-950 text-[10px] font-black uppercase tracking-wider shadow-xs z-10">
+            OUT OF STOCK
+          </div>
+        ) : product.isPopular ? (
+          <div className="absolute top-2.5 left-2.5 px-3 py-1 rounded-2xl bg-[var(--color-deal)] text-[var(--color-text-on-deal)] text-[10px] font-extrabold uppercase tracking-wider shadow-xs z-10">
             POPULAR
           </div>
-        )}
-
-
+        ) : null}
 
         {/* Macro Badge Top Right */}
-        <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-2xl bg-[var(--color-surface)]/90 backdrop-blur-xs text-[var(--color-primary)] text-[11px] font-bold border border-[var(--color-border)] flex items-center gap-1 shadow-xs">
+        <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-2xl bg-[var(--color-surface)]/90 backdrop-blur-xs text-[var(--color-primary)] text-[11px] font-bold border border-[var(--color-border)] flex items-center gap-1 shadow-xs z-10">
           <Flame className="w-3.5 h-3.5 fill-[var(--color-deal)] text-[var(--color-deal)]" />
           <span>{product.nutrition.protein}g Protein</span>
         </div>
@@ -63,8 +70,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       <div className="p-4 flex-1 flex flex-col justify-between">
         <div>
           {/* Category / Type */}
-          <div className="text-[11px] font-extrabold text-[var(--color-primary-muted)] uppercase tracking-wider mb-1">
-            {product.productType || 'Healthy Meal'}
+          <div className="text-[11px] font-extrabold text-[var(--color-primary-muted)] uppercase tracking-wider mb-1 flex items-center justify-between">
+            <span>{product.productType || 'Healthy Meal'}</span>
+            {!isAvailable && (
+              <span className="text-[10px] font-black text-amber-600 dark:text-amber-400">Sold Out</span>
+            )}
           </div>
 
           {/* Title */}
@@ -95,11 +105,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
           <button
             onClick={handleAddToCart}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-[var(--color-accent)] text-[var(--color-text-on-accent)] font-extrabold text-xs hover:bg-[var(--color-accent-hover)] active:scale-95 transition-all cursor-pointer shadow-xs carved-btn"
-            aria-label={`Add ${product.title} to cart`}
+            disabled={!isAvailable}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl font-extrabold text-xs transition-all shadow-xs carved-btn ${
+              !isAvailable
+                ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-75'
+                : 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] hover:bg-[var(--color-accent-hover)] active:scale-95 cursor-pointer'
+            }`}
+            aria-label={isAvailable ? `Add ${product.title} to cart` : `${product.title} is out of stock`}
           >
-            <Plus className="w-3.5 h-3.5 stroke-[3px]" />
-            <span>{inCartQty > 0 ? `ADD (${inCartQty})` : 'ADD'}</span>
+            {isAvailable ? (
+              <>
+                <Plus className="w-3.5 h-3.5 stroke-[3px]" />
+                <span>{inCartQty > 0 ? `ADD (${inCartQty})` : 'ADD'}</span>
+              </>
+            ) : (
+              <span>OUT OF STOCK</span>
+            )}
           </button>
         </div>
       </div>

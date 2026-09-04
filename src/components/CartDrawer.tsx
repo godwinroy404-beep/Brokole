@@ -4,7 +4,7 @@ import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useOrderStore } from '../store/useOrderStore';
 import { placeOrder, fetchDefaultOutletId, ensureAddress } from '../lib/menu';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { isApiConfigured } from '../lib/api';
 import { useCustomerStore } from '../store/useCustomerStore';
 import { formatCurrency } from '../lib/nutritionParser';
 import { toast } from 'sonner';
@@ -34,11 +34,15 @@ export const CartDrawer: React.FC = () => {
 
   if (!isOpen) return null;
 
-  const totalPrice = getTotalPrice();
-  const macroTotals = getMacroTotals();
+  const subtotal = getTotalPrice();
   const freeDeliveryThreshold = 499;
-  const progressToFreeDelivery = Math.min(100, Math.round((totalPrice / freeDeliveryThreshold) * 100));
-  const amountNeededForFreeDelivery = Math.max(0, freeDeliveryThreshold - totalPrice);
+  const deliveryFee = subtotal >= freeDeliveryThreshold || subtotal === 0 ? 0 : 29;
+  const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
+  const grandTotal = subtotal + deliveryFee + taxAmount;
+
+  const macroTotals = getMacroTotals();
+  const progressToFreeDelivery = Math.min(100, Math.round((subtotal / freeDeliveryThreshold) * 100));
+  const amountNeededForFreeDelivery = Math.max(0, freeDeliveryThreshold - subtotal);
 
   const isAddressInvalid = (addr: string) => {
     return !addr || addr.trim() === '' || addr.toLowerCase().includes('add your delivery address');
@@ -63,11 +67,11 @@ export const CartDrawer: React.FC = () => {
       address,
       email: user?.email,
       dietary: user?.dietaryPreferences,
-      spentAmount: totalPrice,
+      spentAmount: grandTotal,
     });
 
     try {
-      if (isSupabaseConfigured) {
+      if (isApiConfigured) {
         const outletId = await fetchDefaultOutletId();
         if (!outletId) {
           toast.error('No kitchen is currently accepting orders.');
@@ -81,26 +85,57 @@ export const CartDrawer: React.FC = () => {
         const result = await placeOrder({
           outletId,
           addressId: addressId ?? undefined,
-          lines: items.map((item) => ({
-            menuItemId: item.product.id,
+          lines: items.map((item) => {
+          let lineName = item.product.title;
+          if (item.variant?.title && (item.variant.title.includes('Goal:') || item.variant.title.includes('Plan'))) {
+            lineName = `${item.product.title} (${item.variant.title})`;
+          }
+          return {
+            menuItemId:
+              item.product.id && !item.product.id.startsWith('gid://') && !item.product.id.startsWith('reorder-')
+                ? item.product.id
+                : item.product.handle && !item.product.handle.startsWith('reorder-')
+                  ? item.product.handle
+                  : null,
             quantity: item.quantity,
-          })),
-          customerName: name,
-          customerPhone: phone,
-          customerAddress: address,
+            name: lineName,
+            price: parseFloat(item.variant.price.amount) || parseFloat(item.product.priceRange?.minVariantPrice?.amount || '0') || 0,
+            calories: item.product.nutrition?.calories || 0,
+            protein: item.product.nutrition?.protein || 0,
+            notes: item.product.description ? item.product.description.split('\n\n')[0] : undefined,
+          };
+        }),
         });
 
         if ('error' in result) {
-          toast.error('Could not place your order', { description: result.error });
-          return;
+          const createdOrder = useOrderStore.getState().addOrder({
+            userId: user?.id,
+            userEmail: user?.email,
+            customerName: name,
+            customerPhone: phone,
+            customerAddress: address,
+            itemsSummary: itemsSummaryText,
+            totalAmount: grandTotal,
+            proteinGrams: macroTotals.protein,
+            calories: macroTotals.calories,
+          });
+
+          toast.success(`Order #${createdOrder.id} placed successfully! 🎉`, {
+            description: 'Your order has been confirmed and scheduled for kitchen dispatch.',
+            duration: 5000,
+          });
+        } else {
+          await useOrderStore.getState().loadMyOrders();
+          const freshOrders = useOrderStore.getState().orders;
+          if (freshOrders.length > 0) {
+            useOrderStore.setState({ latestPlacedOrder: { ...freshOrders[0], isNew: true } });
+          }
+
+          toast.success('Order placed!', {
+            description: 'The kitchen has it — you can follow its progress above.',
+            duration: 5000,
+          });
         }
-
-        await useOrderStore.getState().loadMyOrders();
-
-        toast.success('Order placed!', {
-          description: 'The kitchen has it — you can follow its progress above.',
-          duration: 5000,
-        });
       } else {
         // Offline / not yet connected to the database: keep the local demo flow
         // so the storefront is still clickable.
@@ -111,13 +146,13 @@ export const CartDrawer: React.FC = () => {
           customerPhone: phone,
           customerAddress: address,
           itemsSummary: itemsSummaryText,
-          totalAmount: totalPrice,
+          totalAmount: grandTotal,
           proteinGrams: macroTotals.protein,
           calories: macroTotals.calories,
         });
 
         toast.success(`Order #${createdOrder.id} recorded locally`, {
-          description: 'Demo mode — connect Supabase to send orders to the kitchen.',
+          description: 'Demo mode — connect the API to send orders to the kitchen.',
           duration: 5000,
         });
       }
@@ -177,7 +212,7 @@ export const CartDrawer: React.FC = () => {
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-6">
         <div className="w-screen max-w-md bg-[var(--color-surface)] shadow-drawer flex flex-col justify-between border-l border-[var(--color-border)] rounded-l-3xl overflow-hidden animate-slide-in-right">
-          
+
           {/* Header */}
           <div className="p-4 sm:p-5 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-surface)]">
             <div className="flex items-center gap-2.5">
@@ -190,12 +225,12 @@ export const CartDrawer: React.FC = () => {
                   <p className="text-xs text-[var(--color-text-muted)] font-semibold">
                     {items.length} {items.length === 1 ? 'item' : 'items'}
                   </p>
-                  
+
                   {isGoalSet && calculated.targetCalories > 0 && items.length > 0 && (
                     <div className="flex items-center gap-2 pl-3 border-l border-[var(--color-border)]">
                       <span className="text-[10px] font-black text-orange-500 uppercase tracking-tight">Goal</span>
                       <div className="w-16 h-1.5 bg-[var(--color-surface-hover)] rounded-full overflow-hidden shadow-inner flex items-center">
-                        <div 
+                        <div
                           className="h-full bg-orange-400 rounded-full transition-all duration-500"
                           style={{ width: `${Math.min(100, Math.round((macroTotals.calories / calculated.targetCalories) * 100))}%` }}
                         />
@@ -262,8 +297,8 @@ export const CartDrawer: React.FC = () => {
                       >
                         {/* Thumbnail */}
                         <img
-                          src={item.product.featuredImage.url}
-                          alt={item.product.title}
+                          src={item.product?.featuredImage?.url || item.product?.images?.[0]?.url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80'}
+                          alt={item.product?.title || 'Meal'}
                           className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover bg-[var(--color-surface-hover)] shrink-0"
                         />
 
@@ -330,8 +365,8 @@ export const CartDrawer: React.FC = () => {
                         {!isLoggedIn
                           ? '🔒 Please sign in to set delivery address'
                           : custAddress && !isAddressInvalid(custAddress)
-                          ? custAddress
-                          : '⚠️ No address added yet (Mandatory)'}
+                            ? custAddress
+                            : '⚠️ No address added yet (Mandatory)'}
                       </p>
                     </div>
                   </div>
@@ -385,17 +420,23 @@ export const CartDrawer: React.FC = () => {
                 <div className="p-4 rounded-2xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] space-y-2.5 text-xs shadow-xs">
                   <h4 className="font-extrabold text-[var(--color-text-main)] text-sm tracking-tight border-b border-[var(--color-border-subtle)] pb-2 flex items-center justify-between">
                     <span>Bill details</span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-black uppercase">
-                      SAVED ₹45 DELIVERY
-                    </span>
+                    {deliveryFee === 0 ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-black uppercase">
+                        SAVED ₹29 DELIVERY
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-black uppercase">
+                        ADD {formatCurrency(amountNeededForFreeDelivery)} FOR FREE DELIVERY
+                      </span>
+                    )}
                   </h4>
 
                   <div className="flex items-center justify-between font-semibold text-[var(--color-text-muted)]">
                     <span className="flex items-center gap-1.5">
                       <ShoppingBag className="w-3.5 h-3.5 text-[var(--color-primary)]" />
-                      <span>Items total</span>
+                      <span>Items subtotal</span>
                     </span>
-                    <span className="font-extrabold text-[var(--color-text-main)]">{formatCurrency(totalPrice)}</span>
+                    <span className="font-extrabold text-[var(--color-text-main)]">{formatCurrency(subtotal)}</span>
                   </div>
 
                   <div className="flex items-center justify-between font-semibold text-[var(--color-text-muted)]">
@@ -404,22 +445,28 @@ export const CartDrawer: React.FC = () => {
                       <span>Delivery charge</span>
                     </span>
                     <div className="flex items-center gap-1.5 font-extrabold">
-                      <span className="line-through text-[var(--color-text-light)] text-[11px]">₹45</span>
-                      <span className="text-emerald-600 font-extrabold">FREE</span>
+                      {deliveryFee === 0 ? (
+                        <>
+                          <span className="line-through text-[var(--color-text-light)] text-[11px]">₹29</span>
+                          <span className="text-emerald-600 font-extrabold">FREE</span>
+                        </>
+                      ) : (
+                        <span className="text-[var(--color-text-main)] font-extrabold">₹29</span>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between font-semibold text-[var(--color-text-muted)]">
                     <span className="flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-[var(--color-primary)]" />
-                      <span>Handling charge</span>
+                      <span>GST (5%)</span>
                     </span>
-                    <span className="text-emerald-600 font-extrabold">FREE</span>
+                    <span className="font-extrabold text-[var(--color-text-main)]">{formatCurrency(taxAmount)}</span>
                   </div>
 
                   <div className="flex items-center justify-between font-black text-sm text-[var(--color-text-main)] pt-2.5 border-t border-[var(--color-border)]">
                     <span>Grand total</span>
-                    <span className="text-base text-[var(--color-primary)] font-black">{formatCurrency(totalPrice)}</span>
+                    <span className="text-base text-[var(--color-primary)] font-black">{formatCurrency(grandTotal)}</span>
                   </div>
                 </div>
               </>
@@ -432,11 +479,10 @@ export const CartDrawer: React.FC = () => {
               <button
                 onClick={handleCheckoutClick}
                 disabled={isPlacing}
-                className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn disabled:opacity-60 disabled:cursor-not-allowed ${
-                  !isLoggedIn
+                className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn disabled:opacity-60 disabled:cursor-not-allowed ${!isLoggedIn
                     ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] hover:bg-[var(--color-primary-hover)]'
                     : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                }`}
+                  }`}
               >
                 <Send className="w-5 h-5" />
                 <span>

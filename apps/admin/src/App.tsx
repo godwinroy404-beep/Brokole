@@ -7,15 +7,13 @@ export default function App() {
 
   if (session.loading) {
     return (
-      <div className="grid h-full place-items-center text-sm text-neutral-500 font-medium animate-pulse">
-        Loading operations console…
+      <div className="grid h-full place-items-center text-sm text-neutral-500">
+        Checking your access…
       </div>
     );
   }
 
-  if (!session.session || !session.profile) {
-    return <LoginScreen onDemoLogin={session.signInDemo} />;
-  }
+  if (!session.signedIn || !session.profile) return <LoginScreen onSignedIn={session.refresh} />;
 
   return <AppShell session={session} />;
 }

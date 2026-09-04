@@ -4,7 +4,7 @@ import { fetchProductByHandle, ProductVariant } from '../lib/shopify';
 import { NutritionLabel } from '../components/NutritionLabel';
 import { formatCurrency } from '../lib/nutritionParser';
 import { useCartStore, scaleNutritionForVariant } from '../store/useCartStore';
-import { ArrowLeft, Clock, ShieldCheck, Flame, Plus, Check, Zap, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Clock, ShieldCheck, Flame, Plus, Check, Zap, ShoppingBag, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const Route = createFileRoute('/product/$handle')({
@@ -39,12 +39,14 @@ function ProductDetailPage() {
       id: `${product.id}-default`,
       title: 'Standard Portion',
       price: product.priceRange.minVariantPrice,
-      availableForSale: true,
+      availableForSale: product.isAvailable !== false,
     }
   );
 
   const [selectedImage, setSelectedImage] = useState<string>(product.featuredImage.url);
   const [quantity, setQuantity] = useState<number>(1);
+
+  const isAvailable = product.isAvailable !== false && selectedVariant.availableForSale;
 
   // Scaled nutrition based on selected portion size (Medium +25%, Large +50%)
   const currentNutrition = React.useMemo(() => {
@@ -55,6 +57,10 @@ function ProductDetailPage() {
   const formattedPrice = formatCurrency(priceAmount, selectedVariant.price.currencyCode);
 
   const handleAddToCart = () => {
+    if (!isAvailable) {
+      toast.error(`${product.title} is currently out of stock`);
+      return;
+    }
     addItem(product, selectedVariant, quantity);
     toast.success(`Added ${quantity}x ${product.title} to cart`, {
       description: `${selectedVariant.title} • ${currentNutrition.protein * quantity}g Protein | ${currentNutrition.calories * quantity} kcal`,
@@ -95,17 +101,24 @@ function ProductDetailPage() {
         
         {/* Left Column: Image Gallery */}
         <div className="space-y-4">
-          <div className="relative aspect-4/3 rounded-[var(--color-radius-card)] overflow-hidden bg-[var(--color-surface-hover)] border border-[var(--color-border)] shadow-card">
+          <div className="relative aspect-4/3 rounded-3xl overflow-hidden bg-neutral-900 border border-[var(--color-border)] shadow-card">
             <img
               src={selectedImage}
               alt={product.title}
-              className="w-full h-full object-cover transition-all duration-300"
+              className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 ${!isAvailable ? 'grayscale-[30%]' : ''}`}
             />
-            {/* Delivery Badge Overlay */}
-            <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-[var(--color-accent)] animate-pulse" />
-              <span>Pre-Order Fresh Delivery</span>
-            </div>
+            {/* Delivery / Out of Stock Badge Overlay */}
+            {!isAvailable ? (
+              <div className="absolute top-4 left-4 px-3.5 py-1.5 rounded-full bg-amber-500 text-neutral-950 text-xs font-black flex items-center gap-1.5 z-10 shadow-md">
+                <AlertCircle className="w-4 h-4" />
+                <span>Out of Stock / Sold Out</span>
+              </div>
+            ) : (
+              <div className="absolute top-4 left-4 px-3.5 py-1.5 rounded-full bg-black/70 backdrop-blur-md text-white text-xs font-bold flex items-center gap-1.5 z-10 shadow-md">
+                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400 animate-pulse" />
+                <span>Pre-Order Fresh Delivery</span>
+              </div>
+            )}
           </div>
 
           {/* Image Thumbnails if multiple exist */}
@@ -135,10 +148,17 @@ function ProductDetailPage() {
               <span className="px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] text-xs font-extrabold uppercase">
                 {product.productType || 'Chef Special'}
               </span>
-              <span className="px-2.5 py-0.5 rounded-full bg-[var(--color-accent-light)] text-[var(--color-text-on-accent)] text-xs font-extrabold flex items-center gap-1">
-                <Flame className="w-3.5 h-3.5 fill-[var(--color-accent)] text-[var(--color-accent)]" />
-                {currentNutrition.protein}g Protein ({currentNutrition.calories} kcal)
-              </span>
+              {!isAvailable ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-800 text-xs font-extrabold flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                  Currently Out of Stock
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full bg-[var(--color-accent-light)] text-[var(--color-text-on-accent)] text-xs font-extrabold flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 fill-[var(--color-accent)] text-[var(--color-accent)]" />
+                  {currentNutrition.protein}g Protein ({currentNutrition.calories} kcal)
+                </span>
+              )}
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--color-text-main)] tracking-tight mb-2">
@@ -162,14 +182,16 @@ function ProductDetailPage() {
               <div className="flex items-center gap-3 bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-xl p-1">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-8 h-8 rounded-lg bg-[var(--color-surface)] font-bold text-sm text-[var(--color-text-main)] flex items-center justify-center hover:bg-[var(--color-surface-hover)] cursor-pointer"
+                  disabled={!isAvailable}
+                  className="w-8 h-8 rounded-lg bg-[var(--color-surface)] font-bold text-sm text-[var(--color-text-main)] flex items-center justify-center hover:bg-[var(--color-surface-hover)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   -
                 </button>
                 <span className="text-sm font-black px-2">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
-                  className="w-8 h-8 rounded-lg bg-[var(--color-surface)] font-bold text-sm text-[var(--color-text-main)] flex items-center justify-center hover:bg-[var(--color-surface-hover)] cursor-pointer"
+                  disabled={!isAvailable}
+                  className="w-8 h-8 rounded-lg bg-[var(--color-surface)] font-bold text-sm text-[var(--color-text-main)] flex items-center justify-center hover:bg-[var(--color-surface-hover)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   +
                 </button>
@@ -214,10 +236,21 @@ function ProductDetailPage() {
             {/* Add to Cart CTA */}
             <button
               onClick={handleAddToCart}
-              className="w-full py-3.5 px-4 rounded-[var(--color-radius-btn)] bg-[var(--color-accent)] text-[var(--color-text-on-accent)] font-extrabold text-sm hover:bg-[var(--color-accent-hover)] active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+              disabled={!isAvailable}
+              className={`w-full py-3.5 px-4 rounded-[var(--color-radius-btn)] font-extrabold text-sm transition-all flex items-center justify-center gap-2 shadow-md ${
+                !isAvailable
+                  ? 'bg-neutral-300 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 cursor-not-allowed opacity-80'
+                  : 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] hover:bg-[var(--color-accent-hover)] active:scale-[0.99] cursor-pointer'
+              }`}
             >
-              <Plus className="w-5 h-5 stroke-[3px]" />
-              <span>Add to Cart — {formatCurrency(priceAmount * quantity)}</span>
+              {isAvailable ? (
+                <>
+                  <Plus className="w-5 h-5 stroke-[3px]" />
+                  <span>Add to Cart — {formatCurrency(priceAmount * quantity)}</span>
+                </>
+              ) : (
+                <span>Currently Out of Stock</span>
+              )}
             </button>
           </div>
 

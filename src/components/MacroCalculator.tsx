@@ -16,7 +16,6 @@ export const MacroCalculator: React.FC = () => {
         <div>
           <h2 className="text-xl font-extrabold text-[var(--color-text-main)] flex items-center gap-2">
             <span>My Macro Target Calculator</span>
-            <Sparkles className="w-4 h-4 text-[var(--color-accent)] fill-[var(--color-accent)]" />
           </h2>
           <p className="text-xs text-[var(--color-text-muted)] font-medium">
             Custom nutrition recommendation powered by scientific BMR formulas
@@ -174,7 +173,6 @@ export const MacroCalculator: React.FC = () => {
 
           {/* Quick Tip */}
           <div className="mt-6 pt-4 border-t border-white/10 text-xs text-emerald-100 flex items-center gap-2 font-medium">
-            <Sparkles className="w-4 h-4 text-[var(--color-accent)] shrink-0" />
             <span>Ordering 2 meals from Bro-Ko-Le covers ~70% of your daily protein target!</span>
           </div>
 

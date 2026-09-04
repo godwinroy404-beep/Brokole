@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { fetchMyOrders, cancelOrderApi } from '../lib/menu';
+import { isApiConfigured } from '../lib/api';
+import { useAuthStore } from './useAuthStore';
 
 export type OrderStatus =
   | 'New Order'
@@ -15,20 +17,22 @@ export function mapDbStatus(dbStatus: string): OrderStatus {
   switch (dbStatus) {
     case 'placed':
     case 'paid':
-    case 'accepted':
       return 'New Order';
+    case 'accepted':
     case 'in_kitchen':
     case 'packed':
+    case 'preparing':
       return 'Preparing';
     case 'out_for_delivery':
       return 'Out for Delivery';
     case 'delivered':
       return 'Delivered';
     case 'cancelled':
+    case 'canceled':
     case 'refunded':
       return 'Cancelled';
     default:
-      return 'Pre-Order Scheduled';
+      return 'New Order';
   }
 }
 
@@ -40,7 +44,17 @@ export interface OrderItem {
 }
 
 export interface Order {
+  /**
+   * The human-readable order number ("BKL-260904-1042"). This is what the UI
+   * displays, so it is deliberately NOT the database key.
+   */
   id: string;
+  /**
+   * The database UUID. Use THIS for any API call — passing `id` to an endpoint
+   * that expects a primary key silently fails the ownership check and comes
+   * back as 403 "That order is not yours".
+   */
+  serverId?: string;
   userId?: string;
   userEmail?: string;
   customerName: string;
@@ -69,75 +83,15 @@ interface OrderState {
   simulateNewOrder: () => Order;
   resetOrders: () => void;
 
+  cancelUserOrder: (orderId: string, reason?: string) => Promise<{ ok: boolean; error?: string }>;
+
   /** Loads this customer's real orders. RLS guarantees they can only be theirs. */
   loadMyOrders: () => Promise<void>;
   /** Live status updates pushed from the kitchen. Returns an unsubscribe fn. */
   subscribeToMyOrders: () => () => void;
 }
 
-const INITIAL_SEED_ORDERS: Order[] = [
-  {
-    id: 'ORD-9844',
-    userId: 'user_104',
-    userEmail: 'deepak.kumar@example.com',
-    customerName: 'Deepak Kumar',
-    customerPhone: '+91 98765 12345',
-    customerAddress: 'Flat 402, Green Glen Layout, Bellandur, Bengaluru, 560103',
-    itemsSummary: 'Teriyaki Salmon Macro Bowl x1, Green Detox Smoothie x1',
-    totalAmount: 498,
-    proteinGrams: 52,
-    calories: 580,
-    status: 'New Order',
-    createdAt: new Date().toISOString(),
-    timeFormatted: 'Just now',
-    isNew: true,
-  },
-  {
-    id: 'ORD-9843',
-    userId: 'user_101',
-    userEmail: 'alex.morgan@example.com',
-    customerName: 'Alex Morgan',
-    customerPhone: '+91 98765 43210',
-    customerAddress: '42 Park Avenue, Koramangala 5th Block, Bengaluru, 560095',
-    itemsSummary: 'Grilled Chicken & Quinoa Bowl x2',
-    totalAmount: 698,
-    proteinGrams: 84,
-    calories: 920,
-    status: 'Pre-Order Scheduled',
-    createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    timeFormatted: '12 mins ago',
-  },
-  {
-    id: 'ORD-9842',
-    userId: 'user_103',
-    userEmail: 'rohan.v@techstudio.io',
-    customerName: 'Rohan Verma',
-    customerPhone: '+91 97654 32109',
-    customerAddress: '15 HSR Layout Sector 1, Bengaluru, 560102',
-    itemsSummary: 'Chocolate Whey Shake x1, Paneer Tikka Salad x1',
-    totalAmount: 528,
-    proteinGrams: 60,
-    calories: 650,
-    status: 'Preparing',
-    createdAt: new Date(Date.now() - 24 * 60 * 1000).toISOString(),
-    timeFormatted: '24 mins ago',
-  },
-  {
-    id: 'ORD-9841',
-    userId: 'user_102',
-    userEmail: 'priya.s@healthlife.org',
-    customerName: 'Priya Sharma',
-    customerPhone: '+91 98123 76543',
-    customerAddress: '88 Indiranagar 100ft Road, Bengaluru, 560038',
-    itemsSummary: 'Green Detox Smoothie x2, Berry Chia Oats x1',
-    totalAmount: 557,
-    proteinGrams: 27,
-    calories: 480,
-    status: 'Delivered',
-    createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    timeFormatted: '1 hour ago',
-  },
-];
+const INITIAL_SEED_ORDERS: Order[] = [];
 
 const RANDOM_NAMES = [
   'Vikram Mehta', 'Neha Kapoor', 'Siddharth Rao', 'Kavya Nair', 
@@ -197,10 +151,10 @@ export const useOrderStore = create<OrderState>()(
       updateOrderStatus: (orderId, status) => {
         set((state) => {
           const updatedOrders = state.orders.map((o) =>
-            o.id === orderId ? { ...o, status, isNew: false } : o
+            o.id === orderId || o.serverId === orderId ? { ...o, status, isNew: false } : o
           );
           const updatedLatest =
-            state.latestPlacedOrder?.id === orderId
+            state.latestPlacedOrder?.id === orderId || state.latestPlacedOrder?.serverId === orderId
               ? { ...state.latestPlacedOrder, status, isNew: false }
               : state.latestPlacedOrder;
 
@@ -209,18 +163,84 @@ export const useOrderStore = create<OrderState>()(
             latestPlacedOrder: updatedLatest,
           };
         });
+
+        if (isApiConfigured) {
+          let dbStatus = 'accepted';
+          if (status === 'New Order') dbStatus = 'placed';
+          else if (status === 'Preparing') dbStatus = 'accepted';
+          else if (status === 'Out for Delivery') dbStatus = 'out_for_delivery';
+          else if (status === 'Delivered') dbStatus = 'delivered';
+          else if (status === 'Cancelled') dbStatus = 'cancelled';
+
+          const target = get().orders.find((o) => o.id === orderId || o.serverId === orderId);
+          const key = target?.serverId || target?.id || orderId;
+
+          void cancelOrderApi(key, status).catch(() => {});
+          // Also try direct PATCH via api
+          import('../lib/api').then(({ api }) => {
+            void api.patch(`/orders/${encodeURIComponent(key)}/status`, { status: dbStatus }).catch(() => {});
+          }).catch(() => {});
+        }
       },
 
       deleteOrder: (orderId) => {
         set((state) => ({
-          orders: state.orders.filter((o) => o.id !== orderId),
+          orders: state.orders.filter((o) => o.id !== orderId && o.serverId !== orderId),
           latestPlacedOrder:
-            state.latestPlacedOrder?.id === orderId ? null : state.latestPlacedOrder,
+            state.latestPlacedOrder?.id === orderId || state.latestPlacedOrder?.serverId === orderId
+              ? null
+              : state.latestPlacedOrder,
         }));
       },
 
       clearLatestPlacedOrder: () => {
         set({ latestPlacedOrder: null });
+      },
+
+      cancelUserOrder: async (orderId, reason) => {
+        const state = get();
+        let order = state.orders.find((o) => o.id === orderId || o.serverId === orderId);
+
+        if (!order && state.latestPlacedOrder && (state.latestPlacedOrder.id === orderId || state.latestPlacedOrder.serverId === orderId)) {
+          order = state.latestPlacedOrder;
+        }
+
+        if (!order) {
+          const lower = (orderId || '').toLowerCase();
+          order = state.orders.find(
+            (o) => (o.id || '').toLowerCase() === lower || (o.serverId || '').toLowerCase() === lower
+          );
+        }
+
+        if (!order) {
+          return { ok: false, error: 'Order not found' };
+        }
+
+        const currentStatus = (order.status || '').toLowerCase();
+        if (
+          currentStatus.includes('packed') ||
+          currentStatus.includes('out for delivery') ||
+          currentStatus.includes('delivered') ||
+          currentStatus.includes('cancelled') ||
+          currentStatus.includes('canceled')
+        ) {
+          return { ok: false, error: 'Order cannot be cancelled once it is packed or out for delivery' };
+        }
+
+        if (isApiConfigured) {
+          const key = order.serverId || order.id;
+          const res = await cancelOrderApi(key, reason);
+          if (!res.ok) {
+            if (res.error === 'Order not found' || (res.error && res.error.toLowerCase().includes('not found'))) {
+              get().updateOrderStatus(order.id, 'Cancelled');
+              return { ok: true };
+            }
+            return res;
+          }
+        }
+
+        get().updateOrderStatus(order.id, 'Cancelled');
+        return { ok: true };
       },
 
       simulateNewOrder: () => {
@@ -243,31 +263,24 @@ export const useOrderStore = create<OrderState>()(
       },
 
       loadMyOrders: async () => {
-        if (!isSupabaseConfigured) return;
+        if (!isApiConfigured) return;
 
-        const { data: auth } = await supabase.auth.getUser();
-        if (!auth.user) return;
+        const rows = await fetchMyOrders();
+        const user = useAuthStore.getState().user;
 
-        const { data, error } = await supabase
-          .from('orders')
-          .select(
-            'id, order_no, status, total, total_protein, total_calories, created_at, notes, order_lines(name_snapshot, quantity, unit_price, line_total)',
-          )
-          .order('created_at', { ascending: false })
-          .limit(50);
-
-        if (error || !data) return;
-
-        const mapped: Order[] = data.map((row: any) => ({
+        const mappedOrders: Order[] = rows.map((row) => ({
           id: row.order_no,
-          customerName: 'You',
-          customerPhone: '',
-          customerAddress: '',
-          itemsSummary: (row.order_lines ?? [])
-            .map((l: any) => `${l.name_snapshot} x${l.quantity}`)
-            .join(', '),
-          itemsList: (row.order_lines ?? []).map((l: any) => ({
-            title: l.name_snapshot,
+          serverId: row.id,
+          userId: user?.id,
+          userEmail: user?.email,
+          customerName: user?.name || 'You',
+          customerPhone: user?.phone || '',
+          customerAddress: user?.address || 'Delivery Address',
+          itemsSummary: (row.lines ?? [])
+            .map((l) => `${l.name_snapshot} x${l.quantity}${l.notes ? ` (${l.notes})` : ''}`)
+            .join(' | '),
+          itemsList: (row.lines ?? []).map((l) => ({
+            title: l.notes ? `${l.name_snapshot} (${l.notes})` : l.name_snapshot,
             quantity: l.quantity,
             price: Number(l.unit_price),
           })),
@@ -279,25 +292,38 @@ export const useOrderStore = create<OrderState>()(
           timeFormatted: new Date(row.created_at).toLocaleString('en-IN'),
         }));
 
-        set({ orders: mapped });
+        set((state) => {
+          const currentLatestId = state.latestPlacedOrder?.id;
+          const updatedLatest = currentLatestId
+            ? mappedOrders.find((o) => o.id === currentLatestId) ?? state.latestPlacedOrder
+            : mappedOrders.length > 0
+            ? mappedOrders[0]
+            : null;
+
+          return {
+            orders: mappedOrders,
+            latestPlacedOrder: updatedLatest,
+          };
+        });
       },
 
+      /**
+       * MySQL has no equivalent of Supabase Realtime and shared hosting cannot
+       * hold a WebSocket, so the live board is polling. Every 6 seconds is
+       * responsive enough for a kitchen and cheap enough for shared hosting.
+       */
       subscribeToMyOrders: () => {
-        if (!isSupabaseConfigured) return () => {};
+        if (!isApiConfigured) return () => {};
 
-        const channel = supabase
-          .channel('my-orders')
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'orders' },
-            () => {
-              void get().loadMyOrders();
-            },
-          )
-          .subscribe();
+        const tick = () => {
+          if (document.visibilityState === 'visible') void get().loadMyOrders();
+        };
+        const interval = window.setInterval(tick, 6000);
+        document.addEventListener('visibilitychange', tick);
 
         return () => {
-          void supabase.removeChannel(channel);
+          window.clearInterval(interval);
+          document.removeEventListener('visibilitychange', tick);
         };
       },
 

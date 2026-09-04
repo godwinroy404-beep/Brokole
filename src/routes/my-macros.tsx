@@ -115,7 +115,6 @@ function MyMacrosPage() {
           <div>
             <h2 className="text-xl font-extrabold text-[var(--color-text-main)] tracking-tight flex items-center gap-2">
               <span>{goalInfo.title}</span>
-              <Sparkles className="w-5 h-5 text-[var(--color-accent)] fill-[var(--color-accent)] animate-pulse" />
             </h2>
             <p className="text-xs text-[var(--color-text-muted)] font-medium max-w-2xl mt-0.5">
               {goalInfo.desc}

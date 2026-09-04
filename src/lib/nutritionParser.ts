@@ -57,12 +57,13 @@ export function parseNutritionFacts(description: string, defaults?: Partial<Nutr
 }
 
 export function formatCurrency(amount: number, currencyCode: string = 'INR'): string {
-  if (currencyCode === 'INR') {
-    return `₹${Math.round(amount)}`;
-  }
-  return new Intl.NumberFormat('en-US', {
+  const num = typeof amount === 'number' ? amount : Number.parseFloat(String(amount ?? 0));
+  const validAmt = Number.isFinite(num) ? num : 0;
+  const isInteger = Number.isInteger(validAmt) || Math.abs(validAmt - Math.round(validAmt)) < 0.001;
+  return new Intl.NumberFormat(currencyCode === 'INR' ? 'en-IN' : 'en-US', {
     style: 'currency',
     currency: currencyCode,
-    maximumFractionDigits: 0,
-  }).format(amount);
+    minimumFractionDigits: isInteger ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(validAmt);
 }

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Product, SAMPLE_PRODUCTS } from '../lib/shopify';
 import { fetchMenu } from '../lib/menu';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { isApiConfigured } from '../lib/api';
 
 /**
  * The menu.
@@ -41,7 +42,7 @@ export const useProductStore = create<ProductState>()((set, get) => ({
       const products = await fetchMenu();
       set({
         products: products.length > 0 ? products : SAMPLE_PRODUCTS,
-        source: isSupabaseConfigured && products.length > 0 ? 'database' : 'local',
+        source: (isSupabaseConfigured || isApiConfigured) && products.length > 0 ? 'database' : 'local',
         loaded: true,
       });
     } finally {

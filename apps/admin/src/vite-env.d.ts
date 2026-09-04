@@ -1,11 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_SUPABASE_URL: string;
-  /** Current key name: sb_publishable_... */
-  readonly VITE_SUPABASE_PUBLISHABLE_KEY?: string;
-  /** Legacy key name: eyJhbGci... (retiring end of 2026) */
-  readonly VITE_SUPABASE_ANON_KEY?: string;
+  /** Base URL of the PHP API, e.g. https://brokole.com/api */
+  readonly VITE_API_URL?: string;
 }
 
 interface ImportMeta {

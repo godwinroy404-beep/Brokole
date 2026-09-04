@@ -91,7 +91,7 @@
 /* Carved corner box styling utility */
 .carved-box {
   border-radius: 1.75rem;
-  border: 1px solid var(--color-border);
+  border: none;
   box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.04);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }

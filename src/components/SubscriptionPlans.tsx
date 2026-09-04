@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCartStore } from '../store/useCartStore';
+import { useMacroStore } from '../store/useMacroStore';
 import { Product } from '../lib/shopify';
 import { formatCurrency } from '../lib/nutritionParser';
 import {
@@ -13,6 +14,11 @@ import {
   ChevronRight,
   Utensils,
   Award,
+  Scale,
+  Dumbbell,
+  Target,
+  X,
+  ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -28,6 +34,50 @@ export interface PlanTier {
   features: string[];
   badge?: string;
 }
+
+export interface FitnessGoalOption {
+  id: string;
+  label: string;
+  badge: string;
+  icon: any;
+  desc: string;
+  dietMatch: string;
+}
+
+const FITNESS_GOALS: FitnessGoalOption[] = [
+  {
+    id: 'weight_loss',
+    label: 'Fat Loss & Lean Shred',
+    badge: '🔥 Fat Burn',
+    icon: Scale,
+    desc: 'Calorie-controlled, high-protein & fiber meals engineered to accelerate fat burn.',
+    dietMatch: 'Keto / Low Carb',
+  },
+  {
+    id: 'muscle_gain',
+    label: 'Muscle Build & Hypertrophy',
+    badge: '💪 Muscle Gain',
+    icon: Dumbbell,
+    desc: 'High-protein, amino-dense meal portions tailored for muscle growth & recovery.',
+    dietMatch: 'High Protein',
+  },
+  {
+    id: 'maintenance',
+    label: 'Weight Maintenance & Wellness',
+    badge: '⚖️ Balanced Fit',
+    icon: Target,
+    desc: 'Balanced protein, carbs & fats designed to maintain current weight & daily energy.',
+    dietMatch: 'Balanced Fit',
+  },
+  {
+    id: 'athletic',
+    label: 'Athletic Performance & Energy',
+    badge: '⚡ Peak Performance',
+    icon: Zap,
+    desc: 'Clean complex carbs & protein fueling intense workouts, stamina & endurance.',
+    dietMatch: 'High Protein',
+  },
+];
 
 const SUBSCRIPTION_PLANS: PlanTier[] = [
   {
@@ -83,23 +133,46 @@ const SUBSCRIPTION_PLANS: PlanTier[] = [
 
 export const SubscriptionPlans: React.FC = () => {
   const addItem = useCartStore((state) => state.addItem);
+  const openCart = useCartStore((state) => state.openCart);
+  const setMacroProfile = useMacroStore((state) => state.setProfile);
+  const macroProfile = useMacroStore((state) => state.profile);
 
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'weekly'>('monthly');
   const [selectedDiet, setSelectedDiet] = useState<string>('High Protein');
   const [selectedSlot, setSelectedSlot] = useState<string>('Lunch & Dinner (12 PM & 7 PM)');
 
+  // Modal State for asking Goal upon clicking Subscribe
+  const [pendingPlan, setPendingPlan] = useState<PlanTier | null>(null);
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  const [selectedGoalId, setSelectedGoalId] = useState<string>('weight_loss');
+
   const handleSubscribe = (plan: PlanTier) => {
+    // Determine default pre-selected goal based on macro profile or plan
+    const initialGoal = macroProfile.goal || (plan.id === 'plan-shred-gain' ? 'muscle_gain' : 'weight_loss');
+    setSelectedGoalId(initialGoal);
+    setPendingPlan(plan);
+    setIsGoalModalOpen(true);
+  };
+
+  const confirmSubscriptionWithGoal = (goalObj?: FitnessGoalOption) => {
+    if (!pendingPlan) return;
+    const plan = pendingPlan;
+    const goal = goalObj || FITNESS_GOALS.find((g) => g.id === selectedGoalId) || FITNESS_GOALS[0];
+
+    // Sync user macro profile
+    setMacroProfile({ goal: goal.id as any });
+
     const isMonthly = billingCycle === 'monthly';
     const price = isMonthly ? plan.monthlyPrice : plan.weeklyPrice;
     const duration = isMonthly ? '30-Day Monthly' : '7-Day Weekly';
 
     const customSubscriptionProduct: Product = {
-      id: `sub-${plan.id}-${billingCycle}`,
+      id: `sub-${plan.id}-${billingCycle}-${goal.id}`,
       handle: `subscription-${plan.id}`,
       title: `Bro-Ko-Le ${plan.name} (${duration})`,
       productType: 'Meal Subscription',
-      tags: ['Subscription', 'Meal Plan', plan.name, selectedDiet],
-      description: `${plan.name} (${duration} Subscription)\n\nDietary Focus: ${selectedDiet}\nDelivery Window: ${selectedSlot}\nDaily Protein Target: ${plan.proteinPerDay}g/day\n\nFeatures:\n` + plan.features.join('\n'),
+      tags: ['Subscription', 'Meal Plan', plan.name, selectedDiet, goal.label],
+      description: `${plan.name} (${duration} Subscription)\n\nPrimary Fitness Goal: ${goal.label} (${goal.badge})\nDietary Focus: ${selectedDiet}\nDelivery Window: ${selectedSlot}\nDaily Protein Target: ${plan.proteinPerDay}g/day\n\nFeatures:\n` + plan.features.join('\n'),
       featuredImage: {
         url: '/images/grilled_chicken_bowl.png',
         altText: plan.name,
@@ -113,8 +186,8 @@ export const SubscriptionPlans: React.FC = () => {
       },
       variants: [
         {
-          id: `variant-sub-${plan.id}`,
-          title: `${duration} Plan`,
+          id: `variant-sub-${plan.id}-${goal.id}`,
+          title: `${duration} Plan (${goal.label})`,
           price: { amount: price.toString(), currencyCode: 'INR' },
           availableForSale: true,
         },
@@ -130,9 +203,13 @@ export const SubscriptionPlans: React.FC = () => {
     };
 
     addItem(customSubscriptionProduct);
-    toast.success(`Subscribed to ${plan.name}!`, {
-      description: `${duration} Plan • ${formatCurrency(price)} added to cart`,
+    toast.success(`Subscribed to ${plan.name}! 🎉`, {
+      description: `Goal: ${goal.label} • ${duration} Plan (${formatCurrency(price)}) added to cart`,
     });
+
+    setIsGoalModalOpen(false);
+    setPendingPlan(null);
+    openCart();
   };
 
   return (
@@ -383,6 +460,115 @@ export const SubscriptionPlans: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Fitness Goal Selection Modal */}
+      {isGoalModalOpen && pendingPlan && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative space-y-6 animate-fade-in carved-box">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-subtle)] pb-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] text-xs font-black uppercase mb-1">
+                  <Target className="w-3.5 h-3.5" />
+                  <span>Tailor Your Plan Goal</span>
+                </div>
+                <h3 className="text-xl font-black text-[var(--color-text-main)] tracking-tight">
+                  What is your primary fitness goal?
+                </h3>
+                <p className="text-xs text-[var(--color-text-muted)] font-medium mt-1">
+                  We'll customize your <strong className="text-[var(--color-primary)] font-bold">{pendingPlan.name}</strong> meal portions and macro distribution to match your exact target.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsGoalModalOpen(false);
+                  setPendingPlan(null);
+                }}
+                className="p-2 rounded-2xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-all cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Goal Choice Options */}
+            <div className="space-y-3">
+              {FITNESS_GOALS.map((goal) => {
+                const Icon = goal.icon;
+                const isSelected = selectedGoalId === goal.id;
+                return (
+                  <button
+                    key={goal.id}
+                    type="button"
+                    onClick={() => confirmSubscriptionWithGoal(goal)}
+                    className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3.5 carved-btn ${
+                      isSelected
+                        ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] ring-2 ring-[var(--color-primary-muted)]'
+                        : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] hover:border-[var(--color-primary-muted)]'
+                    }`}
+                  >
+                    <div
+                      className={`p-2.5 rounded-2xl shrink-0 mt-0.5 ${
+                        isSelected
+                          ? 'bg-[var(--color-primary)] text-white'
+                          : 'bg-[var(--color-surface)] text-[var(--color-primary)] border border-[var(--color-border)]'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black text-sm text-[var(--color-text-main)] truncate">
+                          {goal.label}
+                        </span>
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/80 border border-neutral-200 text-neutral-800 shrink-0">
+                          {goal.badge}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--color-text-muted)] font-medium mt-1 leading-relaxed">
+                        {goal.desc}
+                      </p>
+                    </div>
+
+                    {isSelected && (
+                      <div className="w-5 h-5 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center shrink-0 font-bold text-xs mt-1">
+                        ✓
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsGoalModalOpen(false);
+                  setPendingPlan(null);
+                }}
+                className="w-full sm:w-auto px-5 py-3 rounded-2xl border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] text-xs font-bold cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => confirmSubscriptionWithGoal()}
+                className="w-full sm:w-1/2 py-3.5 px-5 rounded-2xl bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
+              >
+                <span>Confirm Goal & Subscribe</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

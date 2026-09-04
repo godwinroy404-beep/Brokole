@@ -24,8 +24,6 @@ export function useAppBootstrap() {
   }, [initialize, loadProducts]);
 
   useEffect(() => {
-    if (!isLoggedIn) return;
-
     const { loadMyOrders, subscribeToMyOrders } = useOrderStore.getState();
     void loadMyOrders();
     const unsubscribe = subscribeToMyOrders();

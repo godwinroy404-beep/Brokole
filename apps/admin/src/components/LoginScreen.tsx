@@ -1,18 +1,18 @@
 import { useState } from 'react';
 import { Lock, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { isStaffRole } from '@brokole/domain';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { isStaffRole, type AppRole } from '@brokole/domain';
+import { api, setToken, isApiConfigured } from '../lib/api';
 
 /**
  * Staff sign-in. Three deliberate absences:
  *   1. No "create account" link — staff exist only because an owner made them.
- *   2. No password stored, compared or shipped in this bundle.
+ *   2. No password compared or stored in this bundle.
  *   3. No demo / bypass button.
  * The role check below is a courtesy so a customer gets a clear message instead
- * of an empty console. It is not what keeps them out; RLS is.
+ * of an empty console. It is not what keeps them out; the API is.
  */
-export function LoginScreen({ onDemoLogin }: { onDemoLogin?: (role?: any, email?: string) => void } = {}) {
+export function LoginScreen({ onSignedIn }: { onSignedIn: () => void | Promise<void> }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -20,14 +20,13 @@ export function LoginScreen({ onDemoLogin }: { onDemoLogin?: (role?: any, email?
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!isSupabaseConfigured) {
-      toast.error('Not connected to the database yet', {
-        description: 'Put a real VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in apps/admin/.env.local, then restart the dev server.',
+    if (!isApiConfigured) {
+      toast.error('Not connected to the API yet', {
+        description: 'Set VITE_API_URL in apps/admin/.env.local, then restart the dev server.',
         duration: 8000,
       });
       return;
     }
-
     if (!email.trim() || !password) {
       toast.error('Enter your work email and password');
       return;
@@ -35,39 +34,28 @@ export function LoginScreen({ onDemoLogin }: { onDemoLogin?: (role?: any, email?
 
     setBusy(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
-      });
+      const { token, user } = await api.post<{
+        token: string;
+        user: { role: AppRole; email: string };
+      }>('/auth/login', { email: email.trim().toLowerCase(), password });
 
-      if (error || !data.user) {
-        // Report the real reason. "Invalid login credentials" and "cannot reach
-        // the server" are very different problems.
-        toast.error('Sign-in failed', {
-          description: error?.message ?? 'Check your email and password.',
-          duration: 6000,
-        });
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, is_active')
-        .eq('id', data.user.id)
-        .single();
-
-      if (!profile?.is_active || !isStaffRole(profile.role)) {
-        await supabase.auth.signOut();
+      if (!isStaffRole(user.role)) {
         toast.error('This account has no access to the operations console.', {
           description:
-            "It signed in fine, but its role is 'customer'. An owner must run: update public.profiles set role = 'owner' where email = '" +
-            email.trim().toLowerCase() +
-            "';",
+            `It signed in fine, but its role is '${user.role}'. An owner must run: ` +
+            `UPDATE users SET role='owner' WHERE email='${user.email}';`,
           duration: 10000,
         });
         return;
       }
-      // useSession picks up the change and swaps in the shell.
+
+      setToken(token);
+      await onSignedIn();
+    } catch (e) {
+      toast.error('Sign-in failed', {
+        description: e instanceof Error ? e.message : 'Check your email and password.',
+        duration: 6000,
+      });
     } finally {
       setBusy(false);
       setPassword('');
@@ -85,11 +73,11 @@ export function LoginScreen({ onDemoLogin }: { onDemoLogin?: (role?: any, email?
           <p className="mt-1 text-sm text-neutral-500">Staff access only</p>
         </div>
 
-        {!isSupabaseConfigured && (
+        {!isApiConfigured && (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-            <strong className="block font-semibold">Not connected to the database</strong>
-            <code>apps/admin/.env.local</code> still holds placeholder values. Add your real
-            Supabase URL and anon key, then restart the dev server.
+            <strong className="block font-semibold">Not connected to the API</strong>
+            <code>apps/admin/.env.local</code> needs <code>VITE_API_URL</code> pointing at your
+            <code> /api</code> folder. Restart the dev server after editing it.
           </div>
         )}
 
@@ -123,9 +111,7 @@ export function LoginScreen({ onDemoLogin }: { onDemoLogin?: (role?: any, email?
           </button>
         </form>
 
-        <p className="mt-4 text-center text-xs text-neutral-400">
-          Need access? Ask an owner to invite you.
-        </p>
+        <p className="mt-4 text-center text-xs text-neutral-400">Need access? Ask an owner to invite you.</p>
       </div>
     </div>
   );

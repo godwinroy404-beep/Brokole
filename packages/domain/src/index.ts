@@ -72,8 +72,8 @@ export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   paid:             ['accepted', 'cancelled', 'refunded'],
   accepted:         ['in_kitchen', 'cancelled'],
   in_kitchen:       ['packed', 'cancelled'],
-  packed:           ['out_for_delivery', 'cancelled'],
-  out_for_delivery: ['delivered', 'cancelled'],
+  packed:           ['out_for_delivery'],
+  out_for_delivery: ['delivered'],
   delivered:        ['refunded'],
   cancelled:        [],
   refunded:         [],
@@ -122,12 +122,14 @@ export function toAmount(value: string | number | null | undefined): number {
 }
 
 export function formatINR(value: string | number | null | undefined): string {
+  const amt = toAmount(value);
+  const isInteger = Number.isInteger(amt) || Math.abs(amt - Math.round(amt)) < 0.001;
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    minimumFractionDigits: 0,
+    minimumFractionDigits: isInteger ? 0 : 2,
     maximumFractionDigits: 2,
-  }).format(toAmount(value));
+  }).format(amt);
 }
 
 // ── pricing rules (mirrors place_order in SQL) ──────────────────────────────
@@ -199,6 +201,7 @@ export interface Order {
   id: string;
   order_no: string;
   status: OrderStatus;
+  channel?: string;
   business_date: string;
   subtotal: string | number;
   tax_amount: string | number;
@@ -210,4 +213,5 @@ export interface Order {
   placed_at: string | null;
   created_at: string;
   notes: string | null;
+  lines?: Array<{ name_snapshot: string; quantity: number; unit_price: string; line_total: string; notes?: string | null }>;
 }

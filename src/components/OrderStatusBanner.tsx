@@ -1,15 +1,81 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouterState } from '@tanstack/react-router';
 import { useOrderStore, OrderStatus } from '../store/useOrderStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { X, ChevronUp, MapPin, Truck, Utensils, Sparkles, CheckCircle2, Clock, Phone, AlertCircle } from 'lucide-react';
+import { isApiConfigured } from '../lib/api';
+import { X, ChevronUp, MapPin, Truck, Utensils, CheckCircle2, Clock, AlertCircle, Ban, MoreVertical, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '../lib/nutritionParser';
+import { toast } from 'sonner';
+
+/**
+ * How long the "Delivered" or "Cancelled" banner stays up before hiding itself.
+ */
+const DELIVERED_AUTO_HIDE_MS = 60_000;
+
+/** When we first saw each order as completed/cancelled, so a page reload can't reset the clock. */
+const FIRST_SEEN_KEY = 'brokole-delivered-first-seen';
+/** Orders whose banner has already gone away — persisted so it stays away. */
+const DISMISSED_KEY = 'brokole-banner-dismissed';
+
+function readJson(key: string): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Keeps only the 30 most recent entries so this can't grow forever. */
+function writeJson(key: string, value: Record<string, number>): void {
+  try {
+    const trimmed = Object.fromEntries(
+      Object.entries(value).sort((a, b) => b[1] - a[1]).slice(0, 30),
+    );
+    localStorage.setItem(key, JSON.stringify(trimmed));
+  } catch {
+    /* private browsing — the banner just won't remember across reloads */
+  }
+}
+
+function isCancelled(status: unknown): boolean {
+  const s = String(status ?? '').trim().toLowerCase();
+  return s === 'cancelled' || s === 'canceled' || s === 'refunded' || s.includes('cancel');
+}
+
+function isDelivered(status: unknown): boolean {
+  const s = String(status ?? '').trim().toLowerCase();
+  return s === 'delivered' || s.includes('delivered') || s === 'completed' || s === 'fulfilled';
+}
+
+function isDone(status: unknown): boolean {
+  return isDelivered(status) || isCancelled(status);
+}
 
 export const OrderStatusBanner: React.FC = () => {
   const { latestPlacedOrder, orders, clearLatestPlacedOrder } = useOrderStore();
-  const { user, isLoggedIn } = useAuthStore();
+  const { user } = useAuthStore();
   const [isExpanded, setIsExpanded] = useState(false);
-  const [dismissedId, setDismissedId] = useState<string | null>(null);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(
+    () => new Set(Object.keys(readJson(DISMISSED_KEY))),
+  );
+
+  const dismissOrder = useCallback((orderId: string) => {
+    setDismissedIds((prev) => {
+      if (prev.has(orderId)) return prev;
+      const next = new Set(prev);
+      next.add(orderId);
+      writeJson(DISMISSED_KEY, { ...readJson(DISMISSED_KEY), [orderId]: Date.now() });
+      return next;
+    });
+    clearLatestPlacedOrder();
+    setIsExpanded(false);
+  }, [clearLatestPlacedOrder]);
+
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
 
   // Read current route location from TanStack Router
   const routerState = useRouterState();
@@ -17,26 +83,64 @@ export const OrderStatusBanner: React.FC = () => {
 
   // Read active order from latestPlacedOrder or store orders
   const activeOrder = useMemo(() => {
-    if (latestPlacedOrder && latestPlacedOrder.id !== dismissedId) {
+    const isSub = (o: any) =>
+      o.channel === 'subscription' ||
+      (o.itemsSummary &&
+        (o.itemsSummary.toLowerCase().includes('subscription') ||
+          o.itemsSummary.toLowerCase().includes('plan'))) ||
+      (o.itemsList &&
+        o.itemsList.some(
+          (item: any) =>
+            item.title?.toLowerCase().includes('subscription') ||
+            item.title?.toLowerCase().includes('plan')
+        ));
+
+    const isExpired = (o: any) => {
+      if (!o || dismissedIds.has(o.id)) return true;
+      if (!isDone(o.status)) return false; // Active in-progress orders are never expired
+
+      const seen = readJson(FIRST_SEEN_KEY);
+      const firstSeen = seen[o.id];
+
+      if (firstSeen) {
+        return Date.now() - firstSeen > DELIVERED_AUTO_HIDE_MS;
+      }
+
+      if (o.createdAt) {
+        const createdMs = new Date(o.createdAt).getTime();
+        if (!isNaN(createdMs) && Date.now() - createdMs > DELIVERED_AUTO_HIDE_MS) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (latestPlacedOrder && !isSub(latestPlacedOrder) && !isExpired(latestPlacedOrder)) {
       return latestPlacedOrder;
     }
 
     if (!orders || orders.length === 0) return null;
 
-    // Filter order matching user or latest order
+    // Filter order matching user and exclude subscription orders
     const matchUser = (o: any) => {
-      if (!user) return true; // show latest order if guest or in local demo
+      if (isSub(o)) return false; // DO NOT show subscription orders in live status tracker banner
+
+      if (!user || isApiConfigured) return true;
       return (
         (o.userId && o.userId === user.id) ||
         (o.userEmail && user.email && o.userEmail.toLowerCase() === user.email.toLowerCase()) ||
-        (o.customerName && user.name && o.customerName.toLowerCase() === user.name.toLowerCase())
+        (o.customerName && user.name && o.customerName.toLowerCase() === user.name.toLowerCase()) ||
+        o.customerName === 'You'
       );
     };
 
     const userOrders = orders.filter(matchUser);
-    const pending = userOrders.find((o) => o.status !== 'Delivered');
-    return pending || (userOrders.length > 0 ? userOrders[0] : null);
-  }, [orders, latestPlacedOrder, user, dismissedId]);
+    const pending = userOrders.find((o) => !isDone(o.status));
+    if (pending) return pending;
+
+    const lastDone = userOrders.find((o) => isDone(o.status) && !isExpired(o));
+    return lastDone ?? null;
+  }, [orders, latestPlacedOrder, user, dismissedIds]);
 
   // Expand automatically when a fresh new order is placed
   useEffect(() => {
@@ -45,70 +149,150 @@ export const OrderStatusBanner: React.FC = () => {
     }
   }, [latestPlacedOrder]);
 
+  const activeOrderId = activeOrder?.id ?? null;
+  const activeDone = isDone(activeOrder?.status);
+
+  useEffect(() => {
+    if (!activeOrderId || !activeDone) return;
+    if (dismissedIds.has(activeOrderId)) return;
+
+    const seen = readJson(FIRST_SEEN_KEY);
+    let firstSeen = seen[activeOrderId];
+
+    if (!firstSeen) {
+      firstSeen = Date.now();
+      writeJson(FIRST_SEEN_KEY, { ...seen, [activeOrderId]: firstSeen });
+    }
+
+    const remaining = DELIVERED_AUTO_HIDE_MS - (Date.now() - firstSeen);
+
+    if (remaining <= 0) {
+      dismissOrder(activeOrderId);
+      return;
+    }
+
+    const timer = setTimeout(() => dismissOrder(activeOrderId), remaining);
+    return () => clearTimeout(timer);
+  }, [activeOrderId, activeDone, dismissedIds, dismissOrder]);
+
+  // Fast 4-second live polling for order status changes from kitchen console
+  useEffect(() => {
+    if (!activeOrderId || !isApiConfigured) return;
+    const loadMyOrders = useOrderStore.getState().loadMyOrders;
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadMyOrders();
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [activeOrderId]);
+
   // HIDE IF NO ORDER PLACED or on kitchen admin page
-  if (pathname.startsWith('/kitchen') || !activeOrder || activeOrder.id === dismissedId) {
+  if (pathname.startsWith('/kitchen') || !activeOrder || dismissedIds.has(activeOrder.id)) {
     return null;
   }
 
   const handleDismiss = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setDismissedId(activeOrder.id);
-    clearLatestPlacedOrder();
     setIsExpanded(false);
   };
 
-  const getStatusDetails = (status: OrderStatus) => {
-    switch (status) {
-      case 'New Order':
-      case 'Pre-Order Scheduled':
-        return {
-          label: 'Order Confirmed',
-          desc: 'Kitchen received your order',
-          step: 1,
-          badgeColor: 'bg-emerald-500 text-white',
-          dotColor: 'bg-emerald-500',
-          scooterMode: 'idle',
-        };
-      case 'Preparing':
-        return {
-          label: 'Preparing in Kitchen',
-          desc: 'Chef is cooking your fresh meal',
-          step: 2,
-          badgeColor: 'bg-amber-500 text-white',
-          dotColor: 'bg-amber-500',
-          scooterMode: 'kitchen',
-        };
-      case 'Out for Delivery':
-        return {
-          label: 'Out for Delivery',
-          desc: 'Rider is on the way (~15 mins)',
-          step: 3,
-          badgeColor: 'bg-indigo-600 text-white',
-          dotColor: 'bg-indigo-500',
-          scooterMode: 'riding',
-        };
-      case 'Delivered':
-        return {
-          label: 'Delivered Fresh 🎉',
-          desc: 'Enjoy your healthy meal!',
-          step: 4,
-          badgeColor: 'bg-emerald-600 text-white',
-          dotColor: 'bg-emerald-500',
-          scooterMode: 'delivered',
-        };
-      default:
-        return {
-          label: 'Order Placed',
-          desc: 'Processing order details',
-          step: 1,
-          badgeColor: 'bg-emerald-500 text-white',
-          dotColor: 'bg-emerald-500',
-          scooterMode: 'idle',
-        };
+  const getStatusDetails = (status: OrderStatus | string) => {
+    const s = (status || '').toLowerCase().trim();
+
+    if (isCancelled(s)) {
+      return {
+        label: 'Order Cancelled',
+        desc: 'This order was cancelled',
+        step: 0,
+        lineColor: 'bg-rose-500',
+        badgeColor: 'bg-rose-600 text-white',
+        dotColor: 'bg-rose-500',
+        activeCircleBg: 'bg-rose-600 text-white ring-4 ring-rose-100 scale-110 shadow-md',
+        scooterMode: 'cancelled',
+      };
     }
+
+    if (isDelivered(s)) {
+      return {
+        label: 'Delivered Fresh 🎉',
+        desc: 'Order delivered successfully! Enjoy your meal.',
+        step: 4,
+        lineColor: 'bg-emerald-600',
+        badgeColor: 'bg-emerald-600 text-white',
+        dotColor: 'bg-emerald-500',
+        activeCircleBg: 'bg-emerald-600 text-white ring-4 ring-emerald-100 scale-110 shadow-md',
+        scooterMode: 'delivered',
+      };
+    }
+
+    if (s === 'out_for_delivery' || s === 'out for delivery') {
+      return {
+        label: 'Out for Delivery',
+        desc: 'Rider is on the way (~15 mins)',
+        step: 3,
+        lineColor: 'bg-indigo-600',
+        badgeColor: 'bg-indigo-600 text-white',
+        dotColor: 'bg-indigo-500',
+        activeCircleBg: 'bg-indigo-600 text-white ring-4 ring-indigo-100 scale-110 shadow-md',
+        scooterMode: 'riding',
+      };
+    }
+
+    if (s === 'accepted' || s === 'in_kitchen' || s === 'packed' || s === 'preparing') {
+      return {
+        label: 'Preparing in Kitchen',
+        desc: 'Chef is cooking your fresh meal',
+        step: 2,
+        lineColor: 'bg-amber-500',
+        badgeColor: 'bg-amber-500 text-white',
+        dotColor: 'bg-amber-500',
+        activeCircleBg: 'bg-amber-500 text-white ring-4 ring-amber-100 scale-110 shadow-md',
+        scooterMode: 'kitchen',
+      };
+    }
+
+    return {
+      label: 'Order Confirmed',
+      desc: 'Kitchen received your order',
+      step: 1,
+      lineColor: 'bg-emerald-500',
+      badgeColor: 'bg-emerald-500 text-white',
+      dotColor: 'bg-emerald-500',
+      activeCircleBg: 'bg-emerald-600 text-white ring-4 ring-emerald-100 scale-110 shadow-md',
+      scooterMode: 'idle',
+    };
   };
 
   const statusInfo = getStatusDetails(activeOrder.status);
+
+  const statusLower = (activeOrder?.status || '').toLowerCase();
+  const isPackedOrBeyond =
+    statusLower.includes('packed') ||
+    statusLower.includes('rider') ||
+    statusLower.includes('out_for_delivery') ||
+    statusLower.includes('out for delivery') ||
+    statusLower.includes('delivered') ||
+    statusLower.includes('cancelled') ||
+    statusLower.includes('canceled') ||
+    statusLower.includes('refunded');
+
+  const isCancellable = activeOrder && !isPackedOrBeyond;
+
+  const handleCancelOrder = async () => {
+    if (!activeOrder || isCancelling) return;
+    setIsCancelling(true);
+    const res = await useOrderStore.getState().cancelUserOrder(activeOrder.id, 'Cancelled by customer via tracker');
+    setIsCancelling(false);
+    if (res.ok) {
+      toast.success(`Order #${activeOrder.id} cancelled successfully`);
+      setIsExpanded(false);
+    } else {
+      toast.error(res.error || 'Could not cancel order');
+    }
+  };
 
   return (
     <>
@@ -133,6 +317,8 @@ export const OrderStatusBanner: React.FC = () => {
               <span className="text-xs select-none">🍳</span>
             ) : statusInfo.scooterMode === 'delivered' ? (
               <span className="text-xs select-none">🎉</span>
+            ) : statusInfo.scooterMode === 'cancelled' ? (
+              <span className="text-[10px] text-rose-400 font-black">✕</span>
             ) : (
               <span className="text-[10px] text-emerald-300 font-bold">✓</span>
             )}
@@ -142,7 +328,11 @@ export const OrderStatusBanner: React.FC = () => {
           <div className="text-left leading-tight">
             <div className="flex items-center gap-1.5">
               <span className="font-mono text-[11px] font-bold text-neutral-300">{activeOrder.id}</span>
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Live</span>
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                statusInfo.scooterMode === 'cancelled' ? 'text-rose-400' : 'text-emerald-400'
+              }`}>
+                {statusInfo.scooterMode === 'cancelled' ? 'Cancelled' : statusInfo.scooterMode === 'delivered' ? 'Done' : 'Live'}
+              </span>
             </div>
             <div className="text-xs font-bold text-white group-hover:text-brand-300 transition">
               {statusInfo.label}
@@ -155,8 +345,14 @@ export const OrderStatusBanner: React.FC = () => {
 
       {/* Expanded Order Tracking Modal / Sheet */}
       {isExpanded && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
-          <div className="w-full max-w-md bg-white border border-neutral-200 rounded-3xl p-5 shadow-2xl space-y-4 animate-slide-up">
+        <div 
+          onClick={() => { setIsExpanded(false); setShowDropdown(false); }}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in cursor-pointer"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-white border border-neutral-200 rounded-3xl p-5 shadow-2xl space-y-4 animate-slide-up cursor-default"
+          >
             {/* Header */}
             <div className="flex items-start justify-between border-b border-neutral-100 pb-3">
               <div>
@@ -169,11 +365,47 @@ export const OrderStatusBanner: React.FC = () => {
                 <p className="text-xs text-neutral-500 mt-0.5 font-medium">{statusInfo.desc}</p>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5 relative">
+                {/* Options Dropdown Button */}
+                {isCancellable && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDropdown((prev) => !prev);
+                      }}
+                      className="rounded-full p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 transition cursor-pointer flex items-center justify-center border border-neutral-200 bg-neutral-50"
+                      title="Order options menu"
+                    >
+                      <MoreVertical className="size-4" />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {showDropdown && (
+                      <div className="absolute right-0 top-full mt-1.5 w-44 bg-white border border-neutral-200 rounded-2xl shadow-xl z-30 py-1 overflow-hidden animate-scale-in">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDropdown(false);
+                            setShowCancelConfirmModal(true);
+                          }}
+                          disabled={isCancelling}
+                          className="w-full px-3.5 py-2.5 text-left text-xs font-extrabold text-rose-600 hover:bg-rose-50 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          <Ban className="size-4 text-rose-500 shrink-0" />
+                          <span>{isCancelling ? 'Cancelling…' : 'Cancel Order'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <button
                   onClick={handleDismiss}
-                  className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition"
-                  title="Dismiss Tracker"
+                  className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition cursor-pointer"
+                  title="Close Tracker Popup"
                 >
                   <X className="size-4" />
                 </button>
@@ -181,13 +413,20 @@ export const OrderStatusBanner: React.FC = () => {
             </div>
 
             {/* Step Progress Line */}
-            <div className="py-2">
+            <div className="py-3 px-1">
               <div className="flex items-center justify-between relative px-2">
                 {/* Background Connecting Line */}
-                <div className="absolute left-6 right-6 top-4 h-0.5 bg-neutral-200 -z-0">
+                <div className="absolute left-6 right-6 top-4 h-1 bg-neutral-200 -z-0 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-brand-600 transition-all duration-500"
-                    style={{ width: `${((statusInfo.step - 1) / 3) * 100}%` }}
+                    className={`h-full ${statusInfo.lineColor} transition-all duration-500`}
+                    style={{
+                      width:
+                        statusInfo.step === 0
+                          ? '0%'
+                          : statusInfo.step === 4
+                          ? '100%'
+                          : `${((statusInfo.step - 1) / 3) * 100}%`,
+                    }}
                   />
                 </div>
 
@@ -197,23 +436,37 @@ export const OrderStatusBanner: React.FC = () => {
                   { s: 3, label: 'Rider', icon: Truck },
                   { s: 4, label: 'Delivered', icon: CheckCircle2 },
                 ].map((st) => {
-                  const isActive = statusInfo.step >= st.s;
-                  const isCurrent = statusInfo.step === st.s;
+                  const isCompleted = statusInfo.step > st.s || statusInfo.step === 4;
+                  const isCurrent = statusInfo.step === st.s && statusInfo.step !== 4;
+                  const isCancelledState = statusInfo.step === 0;
                   const Icon = st.icon;
+
                   return (
                     <div key={st.s} className="flex flex-col items-center gap-1.5 z-10">
                       <div
-                        className={`size-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                          isCurrent
-                            ? 'bg-brand-600 text-white ring-4 ring-brand-100 scale-110 shadow-sm'
-                            : isActive
-                            ? 'bg-brand-600 text-white'
-                            : 'bg-neutral-100 text-neutral-400'
+                        className={`size-9 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                          isCancelledState
+                            ? 'bg-neutral-100 text-neutral-400 border border-neutral-200'
+                            : isCurrent
+                            ? statusInfo.activeCircleBg
+                            : isCompleted
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-neutral-100 text-neutral-400 border border-neutral-200'
                         }`}
                       >
                         <Icon className="size-4" />
                       </div>
-                      <span className={`text-[10px] font-bold ${isActive ? 'text-neutral-900' : 'text-neutral-400'}`}>
+                      <span
+                        className={`text-[11px] transition-colors ${
+                          isCancelledState
+                            ? 'font-medium text-neutral-400'
+                            : isCurrent
+                            ? 'font-black text-neutral-900 scale-105'
+                            : isCompleted
+                            ? 'font-bold text-neutral-800'
+                            : 'font-semibold text-neutral-400'
+                        }`}
+                      >
                         {st.label}
                       </span>
                     </div>
@@ -221,6 +474,14 @@ export const OrderStatusBanner: React.FC = () => {
                 })}
               </div>
             </div>
+
+            {/* Cancelled Order Notice Banner */}
+            {statusInfo.step === 0 && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900 font-medium flex items-center gap-2">
+                <Ban className="size-4 text-rose-600 shrink-0" />
+                <span>This order was cancelled and will not be prepared or delivered.</span>
+              </div>
+            )}
 
             {/* Order Details Card */}
             <div className="rounded-2xl bg-neutral-50 p-3.5 border border-neutral-100 space-y-2 text-xs">
@@ -240,13 +501,68 @@ export const OrderStatusBanner: React.FC = () => {
               </div>
             </div>
 
-            {/* Modal Actions */}
-            <div className="flex items-center justify-between pt-1">
+            {/* Modal Footer Actions */}
+            <div className="pt-1">
               <button
-                onClick={() => setIsExpanded(false)}
-                className="w-full py-2.5 rounded-xl bg-neutral-900 text-white font-bold text-xs hover:bg-neutral-800 transition text-center shadow-xs"
+                type="button"
+                onClick={() => {
+                  if (statusInfo.step === 0 || statusInfo.step === 4) {
+                    dismissOrder(activeOrder.id);
+                  } else {
+                    setIsExpanded(false);
+                  }
+                }}
+                className="w-full py-3 rounded-xl bg-neutral-900 text-white font-bold text-xs hover:bg-neutral-800 transition text-center shadow-xs cursor-pointer"
               >
-                Minimize Tracker
+                {statusInfo.step === 0 ? 'Dismiss Cancelled Order' : statusInfo.step === 4 ? 'Close Tracker' : 'Minimize Tracker'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancellation Confirmation Popup Modal */}
+      {showCancelConfirmModal && activeOrder && (
+        <div
+          onClick={() => setShowCancelConfirmModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-white border border-neutral-200 rounded-3xl p-6 shadow-2xl space-y-4 animate-scale-in text-center cursor-default"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+              <AlertTriangle className="size-6 text-rose-600" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-neutral-900 tracking-tight">
+                Cancel Order #{activeOrder.id}?
+              </h3>
+              <p className="text-xs text-neutral-500 font-medium leading-relaxed">
+                Are you sure you want to cancel this order? Kitchen preparation will stop immediately.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCancelConfirmModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 font-bold text-xs transition cursor-pointer"
+              >
+                Keep Order
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowCancelConfirmModal(false);
+                  await handleCancelOrder();
+                }}
+                disabled={isCancelling}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs transition shadow-xs cursor-pointer disabled:opacity-60"
+              >
+                {isCancelling ? 'Cancelling…' : 'Yes, Cancel'}
               </button>
             </div>
           </div>

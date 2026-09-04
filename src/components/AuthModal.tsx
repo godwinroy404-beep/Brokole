@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { X, Mail, Lock, User, Phone, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { isApiConfigured } from '../lib/api';
 import { toast } from 'sonner';
 
 export const AuthModal: React.FC = () => {
@@ -32,14 +32,6 @@ export const AuthModal: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-
-    if (!isSupabaseConfigured) {
-      toast.error('Not connected to the database yet', {
-        description: 'Fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local, then restart the dev server.',
-        duration: 8000,
-      });
-      return;
-    }
 
     setBusy(true);
     try {
@@ -77,6 +69,13 @@ export const AuthModal: React.FC = () => {
             description: err ?? 'Please try again.',
             duration: 6000,
           });
+          return;
+        }
+
+        if (err) {
+          // Signed up, but the session is pending email confirmation.
+          toast.info('Almost there', { description: err, duration: 8000 });
+          setMode('login');
           return;
         }
 
@@ -150,14 +149,6 @@ export const AuthModal: React.FC = () => {
         </div>
 
         {/* Form */}
-        {!isSupabaseConfigured && (
-          <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-            <strong className="block font-semibold">Not connected to the database</strong>
-            Sign-in is disabled until <code>.env.local</code> has a real
-            <code> VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>. Restart the dev server after editing it.
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-4">
 
           {mode === 'register' && (

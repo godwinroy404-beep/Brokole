@@ -1,0 +1,13 @@
+# Route every request through index.php
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]
+
+# Never serve the config, the schema, or anything under src/
+<FilesMatch "^(config\.php|config\.sample\.php|.*\.sql|.*\.md)$">
+  Require all denied
+</FilesMatch>
+
+RedirectMatch 404 ^/api/src/
+Options -Indexes

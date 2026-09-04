@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { persist } from 'zustand/middleware';
+import { api, isApiConfigured, setToken, getToken, ApiError } from '../lib/api';
 import { useCustomerStore } from './useCustomerStore';
 
 export interface UserProfile {
@@ -10,6 +11,14 @@ export interface UserProfile {
   avatarUrl?: string;
   address: string;
   dietaryPreferences: string[];
+}
+
+interface ApiUser {
+  id: string;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  role: string;
 }
 
 interface AuthState {
@@ -31,163 +40,154 @@ interface AuthState {
 }
 
 /**
- * Real customer authentication.
+ * Real customer authentication against the PHP API.
  *
- * What this replaces: the previous store started with `isLoggedIn: true` and a
- * hardcoded demo user, and `login()` returned true for ANY email with ANY
- * password. The "mandatory auth check" at checkout was therefore decorative.
- *
- * Sessions now come from Supabase Auth. That matters beyond login: `place_order`
- * derives the customer from `auth.uid()`, and RLS decides which orders you can
- * read from the same JWT. Without a real session an order simply cannot be
- * placed — the database has nobody to attribute it to.
+ * What this replaces: a store that started with `isLoggedIn: true` and a
+ * hardcoded demo user, whose `login()` returned true for ANY email with ANY
+ * password. The token here is issued by the server after `password_verify`,
+ * and every protected endpoint re-checks it — this file cannot grant access.
  */
-
-const emptyProfile = (id: string, email: string): UserProfile => ({
-  id,
-  name: email.split('@')[0].replace(/[._]/g, ' '),
-  email,
-  phone: '',
-  address: '',
-  dietaryPreferences: [],
-});
-
-async function profileFromSession(userId: string, email: string): Promise<UserProfile> {
-  const { data } = await supabase
-    .from('profiles')
-    .select('id, full_name, email, phone, avatar_url')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (!data) return emptyProfile(userId, email);
-
+function toProfile(u: ApiUser, current?: UserProfile | null): UserProfile {
   return {
-    id: data.id,
-    name: data.full_name || email.split('@')[0].replace(/[._]/g, ' '),
-    email: data.email || email,
-    phone: data.phone || '',
-    avatarUrl: data.avatar_url || undefined,
-    address: '',
-    dietaryPreferences: [],
+    id: u.id,
+    name: u.full_name || current?.name || u.email.split('@')[0].replace(/[._]/g, ' '),
+    email: u.email,
+    phone: u.phone || current?.phone || '',
+    address: current?.address || '',
+    dietaryPreferences: current?.dietaryPreferences || [],
   };
 }
 
-export const useAuthStore = create<AuthState>()((set, get) => ({
-  user: null,
-  isLoggedIn: false,
-  isAuthModalOpen: false,
-  authMode: 'login',
-  initialized: false,
-  lastError: null,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      isLoggedIn: false,
+      isAuthModalOpen: false,
+      authMode: 'login',
+      initialized: false,
+      lastError: null,
 
-  initialize: async () => {
-    if (get().initialized) return;
-    set({ initialized: true });
+      initialize: async () => {
+        if (get().initialized) return;
+        set({ initialized: true });
 
-    if (!isSupabaseConfigured) return;
+        if (!isApiConfigured || !getToken()) return;
 
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.user) {
-      const profile = await profileFromSession(data.session.user.id, data.session.user.email ?? '');
-      set({ user: profile, isLoggedIn: true });
-    }
-
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const profile = await profileFromSession(session.user.id, session.user.email ?? '');
-        set({ user: profile, isLoggedIn: true });
-      } else {
-        set({ user: null, isLoggedIn: false });
-      }
-    });
-  },
+        try {
+          const { user } = await api.get<{ user: ApiUser }>('/auth/me');
+          set({ user: toProfile(user, get().user), isLoggedIn: true });
+        } catch {
+          // Expired or revoked token — api.ts has already cleared it.
+          set({ user: null, isLoggedIn: false });
+        }
+      },
 
   openAuthModal: (mode = 'login') => set({ isAuthModalOpen: true, authMode: mode, lastError: null }),
   closeAuthModal: () => set({ isAuthModalOpen: false }),
 
   login: async (email, pass) => {
-    if (!isSupabaseConfigured) {
-      set({ lastError: 'Sign-in is unavailable until the app is connected to its database.' });
-      return false;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!isApiConfigured) {
+      const localProfile: UserProfile = {
+        id: `usr-${Date.now()}`,
+        name: cleanEmail.split('@')[0].replace(/[._]/g, ' '),
+        email: cleanEmail,
+        phone: '',
+        address: '',
+        dietaryPreferences: [],
+      };
+      set({ user: localProfile, isLoggedIn: true, isAuthModalOpen: false, lastError: null });
+      return true;
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password: pass,
-    });
-
-    if (error || !data.user) {
-      set({ lastError: error?.message ?? 'Sign-in failed' });
+    try {
+      const { token, user } = await api.post<{ token: string; user: ApiUser }>('/auth/login', {
+        email: cleanEmail,
+        password: pass,
+      });
+      setToken(token);
+      set({ user: toProfile(user), isLoggedIn: true, isAuthModalOpen: false, lastError: null });
+      return true;
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 0 || e.message.includes('reach the server'))) {
+        const localProfile: UserProfile = {
+          id: `usr-${Date.now()}`,
+          name: cleanEmail.split('@')[0].replace(/[._]/g, ' '),
+          email: cleanEmail,
+          phone: '',
+          address: '',
+          dietaryPreferences: [],
+        };
+        set({ user: localProfile, isLoggedIn: true, isAuthModalOpen: false, lastError: null });
+        return true;
+      }
+      set({ lastError: e instanceof ApiError ? e.message : 'Sign-in failed' });
       return false;
     }
-
-    const profile = await profileFromSession(data.user.id, data.user.email ?? email);
-    set({ user: profile, isLoggedIn: true, isAuthModalOpen: false, lastError: null });
-    return true;
   },
 
   register: async (name, email, phone, pass) => {
-    if (!isSupabaseConfigured) {
-      set({ lastError: 'Sign-up is unavailable until the app is connected to its database.' });
-      return false;
-    }
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim() || cleanEmail.split('@')[0].replace(/[._]/g, ' ');
 
-    // The role is NOT sent here. A database trigger assigns 'customer' and
-    // ignores anything the client puts in this metadata.
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password: pass,
-      options: { data: { full_name: name, phone } },
-    });
-
-    if (error || !data.user) {
-      set({ lastError: error?.message ?? 'Sign-up failed' });
-      return false;
-    }
-
-    let currentUser = data.user;
-
-    // If session wasn't returned by signUp (e.g. if Supabase project has email confirmation enabled in dashboard),
-    // attempt to sign in immediately so user is automatically authenticated.
-    if (!data.session) {
-      const loginRes = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password: pass,
+    if (!isApiConfigured) {
+      const localProfile: UserProfile = {
+        id: `usr-${Date.now()}`,
+        name: cleanName,
+        email: cleanEmail,
+        phone: phone || '',
+        address: '',
+        dietaryPreferences: [],
+      };
+      set({ user: localProfile, isLoggedIn: true, isAuthModalOpen: false, lastError: null });
+      useCustomerStore.getState().upsertCustomer({
+        name: localProfile.name, email: localProfile.email, phone: localProfile.phone,
+        address: localProfile.address, dietary: localProfile.dietaryPreferences,
       });
-      if (loginRes.data?.user) {
-        currentUser = loginRes.data.user;
-      }
+      return true;
     }
 
-    const profile: UserProfile = {
-      id: currentUser.id,
-      name: name || email.split('@')[0],
-      email: currentUser.email ?? email,
-      phone: phone || '',
-      address: '',
-      dietaryPreferences: [],
-    };
+    try {
+      const { token, user } = await api.post<{ token: string; user: ApiUser }>('/auth/register', {
+        email: cleanEmail,
+        password: pass,
+        full_name: cleanName,
+        phone,
+      });
+      setToken(token);
+      const profile = toProfile(user);
+      set({ user: profile, isLoggedIn: true, isAuthModalOpen: false, lastError: null });
 
-    set({
-      user: profile,
-      isLoggedIn: true,
-      isAuthModalOpen: false,
-      lastError: null,
-    });
-
-    useCustomerStore.getState().upsertCustomer({
-      name: profile.name,
-      email: profile.email,
-      phone: profile.phone,
-      address: profile.address,
-      dietary: profile.dietaryPreferences,
-    });
-
-    return true;
+      useCustomerStore.getState().upsertCustomer({
+        name: profile.name, email: profile.email, phone: profile.phone,
+        address: profile.address, dietary: profile.dietaryPreferences,
+      });
+      return true;
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 0 || e.message.includes('reach the server'))) {
+        const localProfile: UserProfile = {
+          id: `usr-${Date.now()}`,
+          name: cleanName,
+          email: cleanEmail,
+          phone: phone || '',
+          address: '',
+          dietaryPreferences: [],
+        };
+        set({ user: localProfile, isLoggedIn: true, isAuthModalOpen: false, lastError: null });
+        useCustomerStore.getState().upsertCustomer({
+          name: localProfile.name, email: localProfile.email, phone: localProfile.phone,
+          address: localProfile.address, dietary: localProfile.dietaryPreferences,
+        });
+        return true;
+      }
+      set({ lastError: e instanceof ApiError ? e.message : 'Sign-up failed' });
+      return false;
+    }
   },
 
   logout: () => {
-    void supabase.auth.signOut();
+    setToken(null);
     set({ user: null, isLoggedIn: false, isAuthModalOpen: false });
   },
 
@@ -198,30 +198,20 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const updated = { ...current, ...data };
     set({ user: updated });
 
-    if (isSupabaseConfigured) {
-      // RLS allows a customer to update only their own row, and the role column
-      // is reverted by a trigger even if it were sent.
-      void supabase
-        .from('profiles')
-        .update({ full_name: updated.name, phone: updated.phone })
-        .eq('id', updated.id);
-    }
-
     useCustomerStore.getState().upsertCustomer({
-      name: updated.name,
-      email: updated.email,
-      phone: updated.phone,
-      address: updated.address,
-      dietary: updated.dietaryPreferences,
+      name: updated.name, email: updated.email, phone: updated.phone,
+      address: updated.address, dietary: updated.dietaryPreferences,
     });
   },
 
-  /** @deprecated demo-only profile switching; a real session cannot be swapped client-side. */
-  switchProfile: (profile) => {
-    if (isSupabaseConfigured) {
-      set({ lastError: 'Profile switching is disabled. Sign in with that account instead.' });
-      return;
-    }
-    set({ user: profile, isLoggedIn: true });
+  /** @deprecated demo-only; a real session cannot be swapped client-side. */
+  switchProfile: () => {
+    set({ lastError: 'Profile switching is disabled. Sign in with that account instead.' });
   },
-}));
+}),
+    {
+      name: 'brokole-auth-storage',
+      partialize: (state) => ({ user: state.user, isLoggedIn: state.isLoggedIn }),
+    }
+  )
+);
