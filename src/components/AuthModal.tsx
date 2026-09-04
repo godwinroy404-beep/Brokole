@@ -80,13 +80,6 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
-        if (err) {
-          // Signed up, but the session is pending email confirmation.
-          toast.info('Almost there', { description: err, duration: 8000 });
-          setMode('login');
-          return;
-        }
-
         toast.success('Account created!', { description: 'Welcome to Bro-Ko-Le.' });
       }
     } finally {

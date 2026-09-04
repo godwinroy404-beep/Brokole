@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:admin": "npm --prefix apps/admin run dev",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/server": "^1.5.2",
     "@supabase/supabase-js": "^2.114.0",
     "@tanstack/react-query": "^5.67.0",
     "@tanstack/react-router": "^1.114.0",

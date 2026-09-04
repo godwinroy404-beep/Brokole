@@ -13,5 +13,5 @@ export default defineConfig({
       '@brokole/domain': path.resolve(__dirname, '../../packages/domain/src/index.ts'),
     },
   },
-  server: { port: 5174 },
+  server: { port: 5175, strictPort: true },
 })

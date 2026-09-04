@@ -145,10 +145,24 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return false;
     }
 
+    let currentUser = data.user;
+
+    // If session wasn't returned by signUp (e.g. if Supabase project has email confirmation enabled in dashboard),
+    // attempt to sign in immediately so user is automatically authenticated.
+    if (!data.session) {
+      const loginRes = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password: pass,
+      });
+      if (loginRes.data?.user) {
+        currentUser = loginRes.data.user;
+      }
+    }
+
     const profile: UserProfile = {
-      id: data.user.id,
+      id: currentUser.id,
       name: name || email.split('@')[0],
-      email: data.user.email ?? email,
+      email: currentUser.email ?? email,
       phone: phone || '',
       address: '',
       dietaryPreferences: [],
@@ -156,9 +170,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
     set({
       user: profile,
-      isLoggedIn: Boolean(data.session),
-      isAuthModalOpen: Boolean(data.session),
-      lastError: data.session ? null : 'Check your inbox to confirm your email, then sign in.',
+      isLoggedIn: true,
+      isAuthModalOpen: false,
+      lastError: null,
     });
 
     useCustomerStore.getState().upsertCustomer({

@@ -12,7 +12,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
  * The role check below is a courtesy so a customer gets a clear message instead
  * of an empty console. It is not what keeps them out; RLS is.
  */
-export function LoginScreen() {
+export function LoginScreen({ onDemoLogin }: { onDemoLogin?: (role?: any, email?: string) => void } = {}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
