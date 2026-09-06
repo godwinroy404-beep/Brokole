@@ -72,40 +72,47 @@ export const CartDrawer: React.FC = () => {
 
     try {
       if (isApiConfigured) {
-        const outletId = await fetchDefaultOutletId();
-        if (!outletId) {
-          toast.error('No kitchen is currently accepting orders.');
-          return;
+        let outletId: string | null = null;
+        try {
+          outletId = await fetchDefaultOutletId();
+        } catch {
+          outletId = null;
         }
 
-        const addressId = await ensureAddress({ line1: address });
+        let result: { orderId: string; orderNo: string; total: number } | { error: string } = { error: 'No kitchen outlet available' };
 
-        // Note what is NOT sent: no price, no total. The database reads the
-        // price from menu_items and computes the total itself.
-        const result = await placeOrder({
-          outletId,
-          addressId: addressId ?? undefined,
-          lines: items.map((item) => {
-          let lineName = item.product.title;
-          if (item.variant?.title && (item.variant.title.includes('Goal:') || item.variant.title.includes('Plan'))) {
-            lineName = `${item.product.title} (${item.variant.title})`;
+        if (outletId) {
+          try {
+            const addressId = await ensureAddress({ line1: address }).catch(() => undefined);
+
+            result = await placeOrder({
+              outletId,
+              addressId: addressId ?? undefined,
+              lines: items.map((item) => {
+                let lineName = item.product.title;
+                if (item.variant?.title && (item.variant.title.includes('Goal:') || item.variant.title.includes('Plan'))) {
+                  lineName = `${item.product.title} (${item.variant.title})`;
+                }
+                return {
+                  menuItemId:
+                    item.product.id && !item.product.id.startsWith('gid://') && !item.product.id.startsWith('reorder-')
+                      ? item.product.id
+                      : item.product.handle && !item.product.handle.startsWith('reorder-')
+                        ? item.product.handle
+                        : null,
+                  quantity: item.quantity,
+                  name: lineName,
+                  price: parseFloat(item.variant.price.amount) || parseFloat(item.product.priceRange?.minVariantPrice?.amount || '0') || 0,
+                  calories: item.product.nutrition?.calories || 0,
+                  protein: item.product.nutrition?.protein || 0,
+                  notes: item.product.description ? item.product.description.split('\n\n')[0] : undefined,
+                };
+              }),
+            });
+          } catch {
+            result = { error: 'API unreachable' };
           }
-          return {
-            menuItemId:
-              item.product.id && !item.product.id.startsWith('gid://') && !item.product.id.startsWith('reorder-')
-                ? item.product.id
-                : item.product.handle && !item.product.handle.startsWith('reorder-')
-                  ? item.product.handle
-                  : null,
-            quantity: item.quantity,
-            name: lineName,
-            price: parseFloat(item.variant.price.amount) || parseFloat(item.product.priceRange?.minVariantPrice?.amount || '0') || 0,
-            calories: item.product.nutrition?.calories || 0,
-            protein: item.product.nutrition?.protein || 0,
-            notes: item.product.description ? item.product.description.split('\n\n')[0] : undefined,
-          };
-        }),
-        });
+        }
 
         if ('error' in result) {
           const createdOrder = useOrderStore.getState().addOrder({
@@ -115,6 +122,11 @@ export const CartDrawer: React.FC = () => {
             customerPhone: phone,
             customerAddress: address,
             itemsSummary: itemsSummaryText,
+            itemsList: items.map((item) => ({
+              title: item.product.title,
+              quantity: item.quantity,
+              price: parseFloat(item.variant.price.amount) || parseFloat(item.product.priceRange?.minVariantPrice?.amount || '0') || 0,
+            })),
             totalAmount: grandTotal,
             proteinGrams: macroTotals.protein,
             calories: macroTotals.calories,
@@ -125,7 +137,7 @@ export const CartDrawer: React.FC = () => {
             duration: 5000,
           });
         } else {
-          await useOrderStore.getState().loadMyOrders();
+          await useOrderStore.getState().loadMyOrders().catch(() => {});
           const freshOrders = useOrderStore.getState().orders;
           if (freshOrders.length > 0) {
             useOrderStore.setState({ latestPlacedOrder: { ...freshOrders[0], isNew: true } });

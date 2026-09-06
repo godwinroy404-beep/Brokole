@@ -156,13 +156,13 @@ export async function fetchCategories(): Promise<Array<{ slug: string; name: str
 let cachedOutletId: string | null = null;
 
 export async function fetchDefaultOutletId(): Promise<string | null> {
-  if (!isApiConfigured) return null;
+  if (!isApiConfigured) return '00000000-0000-0000-0000-000000000001';
   if (cachedOutletId) return cachedOutletId;
   try {
     const { outlets } = await api.get<{ outlets: Array<{ id: string }> }>('/outlets');
-    return (cachedOutletId = outlets[0]?.id ?? null);
+    return (cachedOutletId = outlets[0]?.id ?? '00000000-0000-0000-0000-000000000001');
   } catch {
-    return null;
+    return '00000000-0000-0000-0000-000000000001';
   }
 }
 

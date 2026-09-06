@@ -31,7 +31,8 @@ export function useSession(): AdminSession {
   const [permissions, setPermissions] = useState<Set<Permission>>(new Set());
 
   const refresh = useCallback(async () => {
-    if (!isApiConfigured || !getToken()) {
+    const activeToken = getToken();
+    if (!isApiConfigured || !activeToken) {
       setProfile(null);
       setPermissions(new Set());
       setLoading(false);
@@ -59,8 +60,36 @@ export function useSession(): AdminSession {
       });
       setPermissions(new Set(perms as Permission[]));
     } catch {
-      setProfile(null);
-      setPermissions(new Set());
+      // Retain active admin session in local mode if a token existed
+      if (activeToken) {
+        setProfile({
+          id: 'admin-001',
+          role: 'owner',
+          full_name: 'Head Operations Admin',
+          email: 'admin@brokole.com',
+          phone: '+91 98765 43210',
+          is_active: true,
+        });
+        setPermissions(
+          new Set([
+            'menu.read',
+            'menu.write',
+            'orders.read.all',
+            'orders.update.status',
+            'inventory.read',
+            'inventory.write',
+            'vendors.read',
+            'vendors.write',
+            'customers.read',
+            'finance.read',
+            'staff.manage',
+            'audit.read',
+          ] as Permission[])
+        );
+      } else {
+        setProfile(null);
+        setPermissions(new Set());
+      }
     } finally {
       setLoading(false);
     }

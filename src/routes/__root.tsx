@@ -5,12 +5,14 @@ import { BottomNav } from '../components/BottomNav';
 import { CartDrawer } from '../components/CartDrawer';
 import { AuthModal } from '../components/AuthModal';
 import { OrderStatusBanner } from '../components/OrderStatusBanner';
+import { NotFoundPage } from '../components/NotFoundPage';
 import { Toaster } from 'sonner';
 import { useCartSync } from '../hooks/useCartSync';
 import { useAppBootstrap } from '../hooks/useAppBootstrap';
 
 export const Route = createRootRoute({
   component: RootLayout,
+  notFoundComponent: NotFoundPage,
 });
 
 function RootLayout() {

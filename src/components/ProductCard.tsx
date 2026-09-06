@@ -48,21 +48,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           loading="lazy"
         />
 
-        {/* Out of Stock or Popular Badge Top Left */}
-        {!isAvailable ? (
-          <div className="absolute top-2.5 left-2.5 px-3 py-1 rounded-2xl bg-amber-500 text-neutral-950 text-[10px] font-black uppercase tracking-wider shadow-xs z-10">
-            OUT OF STOCK
+        {/* Badges Overlay Header */}
+        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5 z-10 pointer-events-none">
+          <div className="shrink-0">
+            {!isAvailable ? (
+              <span className="px-2.5 py-1 rounded-2xl bg-emerald-500 text-neutral-950 text-[9px] sm:text-[10px] font-black uppercase tracking-wider shadow-xs block">
+                OUT OF STOCK
+              </span>
+            ) : product.isPopular ? (
+              <span className="px-2.5 py-1 rounded-2xl bg-[var(--color-deal)] text-[var(--color-text-on-deal)] text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider shadow-xs block">
+                POPULAR
+              </span>
+            ) : null}
           </div>
-        ) : product.isPopular ? (
-          <div className="absolute top-2.5 left-2.5 px-3 py-1 rounded-2xl bg-[var(--color-deal)] text-[var(--color-text-on-deal)] text-[10px] font-extrabold uppercase tracking-wider shadow-xs z-10">
-            POPULAR
-          </div>
-        ) : null}
 
-        {/* Macro Badge Top Right */}
-        <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-2xl bg-[var(--color-surface)]/90 backdrop-blur-xs text-[var(--color-primary)] text-[11px] font-bold border border-[var(--color-border)] flex items-center gap-1 shadow-xs z-10">
-          <Flame className="w-3.5 h-3.5 fill-[var(--color-deal)] text-[var(--color-deal)]" />
-          <span>{product.nutrition.protein}g Protein</span>
+          <div className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-2xl bg-[var(--color-surface)]/95 backdrop-blur-md text-[var(--color-primary)] text-[10px] sm:text-[11px] font-bold border border-[var(--color-border)] flex items-center gap-1 shadow-xs shrink-0 ml-auto">
+            <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-[var(--color-deal)] text-[var(--color-deal)] shrink-0" />
+            <span className="whitespace-nowrap">{product.nutrition.protein}g Protein</span>
+          </div>
         </div>
       </Link>
 
@@ -73,7 +76,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <div className="text-[11px] font-extrabold text-[var(--color-primary-muted)] uppercase tracking-wider mb-1 flex items-center justify-between">
             <span>{product.productType || 'Healthy Meal'}</span>
             {!isAvailable && (
-              <span className="text-[10px] font-black text-amber-600 dark:text-amber-400">Sold Out</span>
+              <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">Sold Out</span>
             )}
           </div>
 

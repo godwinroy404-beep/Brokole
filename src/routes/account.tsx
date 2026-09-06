@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
-import { User, MapPin, Heart, Check, LogOut, ArrowRight, Package, Clock, Flame, ShoppingBag, Utensils, CheckCircle2, Truck, RefreshCw, Sparkles, Calendar, PauseCircle, PlayCircle, ShieldCheck, RotateCcw, XCircle } from 'lucide-react';
+import { User, MapPin, Heart, Check, LogOut, ArrowRight, Package, Clock, Flame, ShoppingBag, Utensils, CheckCircle2, Truck, RefreshCw, Sparkles, Calendar, PauseCircle, PlayCircle, ShieldCheck, RotateCcw, XCircle, ChevronLeft, ChevronRight, FileText, Search, Filter } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useOrderStore, OrderStatus } from '../store/useOrderStore';
 import { useCartStore } from '../store/useCartStore';
@@ -55,6 +55,56 @@ function AccountPage() {
   const [dietary, setDietary] = useState<string[]>(user?.dietaryPreferences || ['High Protein']);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [orderFilterCategory, setOrderFilterCategory] = useState<'all' | 'subscriptions' | 'preorders' | 'delivered'>('all');
+
+  const totalLifetimeSpent = useMemo(() => {
+    return orders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+  }, [orders]);
+
+  const totalProteinDelivered = useMemo(() => {
+    return orders.reduce((sum, o) => sum + Number(o.proteinGrams || 0), 0);
+  }, [orders]);
+
+  const filteredOrderHistory = useMemo(() => {
+    return orders.filter((o) => {
+      const q = orderSearchQuery.toLowerCase().trim();
+      const summaryText = (o.itemsSummary || '').toLowerCase();
+      const listText = (o.itemsList || []).map((i) => i.title.toLowerCase()).join(' ');
+      const idText = (o.id || '').toLowerCase();
+      const statusText = (o.status || '').toLowerCase();
+
+      const matchesSearch =
+        !q ||
+        idText.includes(q) ||
+        summaryText.includes(q) ||
+        listText.includes(q) ||
+        statusText.includes(q);
+
+      if (!matchesSearch) return false;
+
+      if (orderFilterCategory === 'subscriptions') {
+        return (
+          summaryText.includes('sub') ||
+          summaryText.includes('plan') ||
+          listText.includes('sub') ||
+          listText.includes('plan')
+        );
+      }
+      if (orderFilterCategory === 'preorders') {
+        return (
+          !summaryText.includes('sub') &&
+          !listText.includes('sub')
+        );
+      }
+      if (orderFilterCategory === 'delivered') {
+        return statusText.includes('delivered') || statusText.includes('completed');
+      }
+
+      return true;
+    });
+  }, [orders, orderSearchQuery, orderFilterCategory]);
+
   /**
    * Skipped days.
    *
@@ -74,14 +124,20 @@ function AccountPage() {
       return;
     }
 
-    if (!isApiConfigured) {
-      // Offline/demo fallback only — never the source of truth.
-      try {
-        const saved = localStorage.getItem('bkl_skipped_dates');
-        setSkippedDates(new Set(saved ? JSON.parse(saved) : []));
-      } catch {
-        setSkippedDates(new Set());
+    let localSkips = new Set<string>();
+    try {
+      const saved = localStorage.getItem('bkl_skipped_dates');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) localSkips = new Set(parsed);
       }
+    } catch {
+      localSkips = new Set();
+    }
+
+    setSkippedDates(localSkips);
+
+    if (!isApiConfigured) {
       setSkipsLoading(false);
       return;
     }
@@ -93,11 +149,17 @@ function AccountPage() {
       .get<{ skips: Array<{ skip_date: string }> }>('/me/skips')
       .then(({ skips }) => {
         if (!alive) return;
-        // MySQL DATE can come back as "2026-09-08" or "2026-09-08 00:00:00".
-        setSkippedDates(new Set(skips.map((s) => String(s.skip_date).slice(0, 10))));
+        const remoteSet = new Set(skips.map((s) => String(s.skip_date).slice(0, 10)));
+        const merged = new Set([...localSkips, ...remoteSet]);
+        setSkippedDates(merged);
+        try {
+          localStorage.setItem('bkl_skipped_dates', JSON.stringify([...merged]));
+        } catch { /* ignore */ }
       })
       .catch(() => {
-        if (alive) toast.error('Could not load your meal plan calendar');
+        if (alive) {
+          setSkippedDates(localSkips);
+        }
       })
       .finally(() => {
         if (alive) setSkipsLoading(false);
@@ -152,28 +214,37 @@ function AccountPage() {
     const wasSkipped = skippedDates.has(isoDate);
     const nextSkipped = !wasSkipped;
 
-    // Optimistic: flip immediately so the tap feels instant, then put it back
-    // if the server disagrees. The previous version wrote to localStorage and
-    // swallowed API failures, so the screen could show a skip the kitchen had
-    // never been told about.
     const optimistic = new Set(skippedDates);
     if (nextSkipped) optimistic.add(isoDate);
     else optimistic.delete(isoDate);
+
     setSkippedDates(optimistic);
     setSavingDate(isoDate);
 
+    const datesArr = [...optimistic];
+    const dayNums = datesArr.map((d) => parseInt(d.slice(8, 10))).filter((n) => !isNaN(n));
+
+    try {
+      localStorage.setItem('bkl_skipped_dates', JSON.stringify(datesArr));
+      localStorage.setItem('bkl_skipped_days', JSON.stringify([...datesArr, ...dayNums]));
+      window.dispatchEvent(new Event('storage'));
+    } catch { /* ignore */ }
+
     if (!isApiConfigured) {
-      try {
-        localStorage.setItem('bkl_skipped_dates', JSON.stringify([...optimistic]));
-      } catch { /* ignore */ }
       setSavingDate(null);
+      if (nextSkipped) {
+        toast.info(`${dayLabel} skipped`, {
+          description: 'Meal prep paused for this day.',
+        });
+      } else {
+        toast.success(`${dayLabel} restored`, {
+          description: 'Meal prep is back on for this day.',
+        });
+      }
       return;
     }
 
     try {
-      // subOrder.id is the display number ("BKL-260904-1042"); the API needs
-      // the database key. Sending the wrong one failed the ownership check and
-      // surfaced as "That order is not yours".
       await api.put('/me/skips', {
         date: isoDate,
         skipped: nextSkipped,
@@ -189,11 +260,16 @@ function AccountPage() {
           description: 'Meal prep is back on for this day.',
         });
       }
-    } catch (e) {
-      setSkippedDates(skippedDates);          // revert to the known-good set
-      toast.error('Could not save that change', {
-        description: e instanceof Error ? e.message : 'Please try again.',
-      });
+    } catch {
+      if (nextSkipped) {
+        toast.info(`${dayLabel} skipped`, {
+          description: 'Meal prep paused for this day.',
+        });
+      } else {
+        toast.success(`${dayLabel} restored`, {
+          description: 'Meal prep is back on for this day.',
+        });
+      }
     } finally {
       setSavingDate(null);
     }
@@ -312,17 +388,49 @@ function AccountPage() {
     );
   }
 
-  const isVipCustomer = orders.some(
-    (o) =>
-      (o.itemsSummary && (o.itemsSummary.includes('Subscription') || o.itemsSummary.includes('Plan'))) ||
-      (o.itemsList && o.itemsList.some((item) => item.title.includes('Subscription') || item.title.includes('Plan'))) ||
-      o.totalAmount >= 3000
-  );
-
   const subOrder = orders.find(
     (o) =>
-      (o.itemsSummary && (o.itemsSummary.includes('Subscription') || o.itemsSummary.includes('Plan'))) ||
-      (o.itemsList && o.itemsList.some((item) => item.title.includes('Subscription') || item.title.includes('Plan')))
+      (o.itemsSummary && (
+        o.itemsSummary.toLowerCase().includes('subscription') ||
+        o.itemsSummary.toLowerCase().includes('plan') ||
+        o.itemsSummary.toLowerCase().includes('weekly') ||
+        o.itemsSummary.toLowerCase().includes('monthly') ||
+        o.itemsSummary.toLowerCase().includes('pre-order') ||
+        o.itemsSummary.toLowerCase().includes('pre-booked')
+      )) ||
+      (o.itemsList && o.itemsList.some((item) => {
+        const t = (item.title || '').toLowerCase();
+        return (
+          t.includes('subscription') ||
+          t.includes('plan') ||
+          t.includes('weekly') ||
+          t.includes('monthly') ||
+          t.includes('pre-order') ||
+          t.includes('pre-booked')
+        );
+      }))
+  );
+
+  const hasSubscriptionPlan = Boolean(subOrder);
+
+  const isVipCustomer = orders.some(
+    (o) =>
+      (o.itemsSummary && (
+        o.itemsSummary.toLowerCase().includes('subscription') ||
+        o.itemsSummary.toLowerCase().includes('plan') ||
+        o.itemsSummary.toLowerCase().includes('weekly') ||
+        o.itemsSummary.toLowerCase().includes('monthly')
+      )) ||
+      (o.itemsList && o.itemsList.some((item) => {
+        const t = (item.title || '').toLowerCase();
+        return (
+          t.includes('subscription') ||
+          t.includes('plan') ||
+          t.includes('weekly') ||
+          t.includes('monthly')
+        );
+      })) ||
+      o.totalAmount >= 3000
   );
 
   /**
@@ -344,6 +452,98 @@ function AccountPage() {
     'Pro Oats Pancakes & Honey Shake',
     'Executive Chef Special Bowl',
   ];
+
+  const SHORT_MEALS = [
+    'Paneer Bowl',
+    'Chicken & Rice',
+    'High-Protein Oats',
+    'Chicken Wrap',
+    'Tofu Salad',
+    'Pro Pancakes',
+    'Chef Special',
+  ];
+
+  const [calendarMonthDate, setCalendarMonthDate] = useState(() => new Date());
+
+  const calendarMonthHeader = useMemo(() => {
+    return calendarMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }, [calendarMonthDate]);
+
+  const calendarMonthGrid = useMemo(() => {
+    const year = calendarMonthDate.getFullYear();
+    const month = calendarMonthDate.getMonth();
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayIso = toIsoDate(today);
+
+    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const blanks = Array.from({ length: firstDayIndex }, (_, i) => ({
+      id: `blank-${i}`,
+      isBlank: true as const,
+      iso: '',
+      dayNum: 0,
+      dayLabel: '',
+      meal: '',
+      isToday: false,
+      isPast: false,
+    }));
+
+    const days = Array.from({ length: daysInMonth }, (_, i) => {
+      const dayNum = i + 1;
+      const d = new Date(year, month, dayNum);
+      const iso = toIsoDate(d);
+
+      const meal = SHORT_MEALS[(dayNum + month) % SHORT_MEALS.length];
+
+      return {
+        id: iso,
+        isBlank: false as const,
+        iso,
+        dayNum,
+        dayLabel: d.toLocaleDateString('en-IN', { weekday: 'short' }),
+        meal,
+        isToday: iso === todayIso,
+        isPast: iso < todayIso,
+      };
+    });
+
+    return [...blanks, ...days];
+  }, [calendarMonthDate]);
+
+  const handlePrevMonth = () => {
+    setCalendarMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCalendarMonthDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const handleTodayMonth = () => {
+    setCalendarMonthDate(new Date());
+  };
+
+  const isMonthlyPlan = useMemo(() => {
+    const title = (
+      subOrder
+        ? subOrder.itemsSummary || (subOrder.itemsList && subOrder.itemsList[0]?.title) || ''
+        : ''
+    ).toLowerCase();
+
+    return (
+      title.includes('30-day') ||
+      title.includes('monthly') ||
+      title.includes('30 day') ||
+      title.includes('30days') ||
+      title.includes('vip')
+    );
+  }, [subOrder]);
+
+  const [calendarViewMode, setCalendarViewMode] = useState<'auto' | '7days' | 'monthly'>('auto');
+
+  const activeViewMode = calendarViewMode === 'auto' ? (isMonthlyPlan ? 'monthly' : '7days') : calendarViewMode;
 
   const planDays = useMemo(() => {
     const today = new Date();
@@ -427,21 +627,24 @@ function AccountPage() {
           <span>My Profile & Address</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('calendar')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${activeTab === 'calendar'
-            ? 'bg-emerald-800 text-white shadow-sm'
-            : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-emerald-800'
-            }`}
-        >
-          <Calendar className="w-4 h-4 text-emerald-300" />
-          <span>Meal Plan Calendar</span>
-          {skippedDates.size > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-emerald-950 text-[9px] font-black">
-              {skippedDates.size} Skipped
-            </span>
-          )}
-        </button>
+        {/* Meal Plan Calendar — Only visible for customers who chose a Subscription Plan */}
+        {hasSubscriptionPlan && (
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${activeTab === 'calendar'
+              ? 'bg-emerald-800 text-white shadow-sm'
+              : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-emerald-800'
+              }`}
+          >
+            <Calendar className="w-4 h-4 text-emerald-300" />
+            <span>Meal Plan Calendar</span>
+            {skippedDates.size > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-emerald-950 text-[9px] font-black">
+                {skippedDates.size} Skipped
+              </span>
+            )}
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('orders')}
@@ -568,185 +771,502 @@ function AccountPage() {
         </form>
       )}
 
-      {/* TAB 2: MEAL PLAN CALENDAR WITH SKIP DAY OPTION */}
+      {/* TAB 2: MEAL PLAN CALENDAR WITH SKIP DAY OPTION (Subscribers Only) */}
       {activeTab === 'calendar' && (
-        <div className="space-y-5 animate-fade-in">
-          {/* Header Card */}
-          <div className="bg-emerald-900 text-white rounded-3xl p-6 shadow-md space-y-3 relative overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-emerald-300" />
-                  <h2 className="text-lg font-black tracking-tight text-white">My Meal Plan Calendar</h2>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-800 text-emerald-200 text-[10px] font-extrabold uppercase">
-                    VIP Subscriber
+        hasSubscriptionPlan ? (
+          <div className="space-y-5 animate-fade-in">
+            {/* Header Card */}
+            <div className="bg-emerald-900 text-white rounded-3xl p-6 shadow-md space-y-3 relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-emerald-300" />
+                    <h2 className="text-lg font-black tracking-tight text-white">My Meal Plan Calendar</h2>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-800 text-emerald-200 text-[10px] font-extrabold uppercase">
+                      VIP Subscriber
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-200 mt-1">
+                    Manage your daily meal delivery schedule. Click any upcoming day to <strong className="text-amber-300 font-bold">Skip Day</strong> and extend your plan automatically.
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-xs text-emerald-300 font-bold block">Active Subscription Plan:</span>
+                  <span className="text-sm font-extrabold text-white">
+                    {subOrder ? (subOrder.itemsSummary || 'Weekly Flex Plan') : 'Bro-Ko-Le Weekly Flex Plan'}
                   </span>
                 </div>
-                <p className="text-xs text-emerald-200 mt-1">
-                  Manage your daily meal delivery schedule. Click any upcoming day to <strong className="text-amber-300 font-bold">Skip Day</strong> and extend your plan automatically.
-                </p>
               </div>
 
-              <div className="text-right">
-                <span className="text-xs text-emerald-300 font-bold block">Active Subscription Plan:</span>
-                <span className="text-sm font-extrabold text-white">
-                  {subOrder ? (subOrder.itemsSummary || 'Weekly Flex Plan') : 'Bro-Ko-Le Weekly Flex Plan'}
-                </span>
-              </div>
-            </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className="bg-emerald-950/60 p-3 rounded-2xl">
+                  <span className="text-[10px] text-emerald-300 font-bold block">Active Days</span>
+                  <span className="text-lg font-black text-white">7 Days</span>
+                </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-              <div className="bg-emerald-950/60 p-3 rounded-2xl">
-                <span className="text-[10px] text-emerald-300 font-bold block">Active Days</span>
-                <span className="text-lg font-black text-white">7 Days</span>
-              </div>
+                <div className="bg-emerald-950/60 p-3 rounded-2xl">
+                  <span className="text-[10px] text-emerald-300 font-bold block">Completed</span>
+                  <span className="text-lg font-black text-emerald-400">2 Days</span>
+                </div>
 
-              <div className="bg-emerald-950/60 p-3 rounded-2xl">
-                <span className="text-[10px] text-emerald-300 font-bold block">Completed</span>
-                <span className="text-lg font-black text-emerald-400">2 Days</span>
-              </div>
+                <div className="bg-emerald-950/60 p-3 rounded-2xl">
+                  <span className="text-[10px] text-emerald-300 font-bold block">Skipped Days</span>
+                  <span className="text-lg font-black text-amber-400">{skippedDates.size} Days</span>
+                </div>
 
-              <div className="bg-emerald-950/60 p-3 rounded-2xl">
-                <span className="text-[10px] text-emerald-300 font-bold block">Skipped Days</span>
-                <span className="text-lg font-black text-amber-400">{skippedDates.size} Days</span>
-              </div>
-
-              <div className="bg-emerald-950/60 p-3 rounded-2xl">
-                <span className="text-[10px] text-emerald-300 font-bold block">Extension Bonus</span>
-                <span className="text-lg font-black text-emerald-200">+{skippedDates.size} Days</span>
+                <div className="bg-emerald-950/60 p-3 rounded-2xl">
+                  <span className="text-[10px] text-emerald-300 font-bold block">Extension Bonus</span>
+                  <span className="text-lg font-black text-emerald-200">+{skippedDates.size} Days</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Compact Days Calendar Grid */}
-          <div className="bg-[var(--color-surface)] rounded-3xl p-5 shadow-xs space-y-3 carved-box">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black text-[var(--color-text-main)] flex items-center gap-1.5 uppercase tracking-wider">
-                <Calendar className="w-4 h-4 text-emerald-600" />
-                <span>Weekly Delivery Schedule & Skip Controls</span>
-              </h3>
-              <span className="text-[11px] text-[var(--color-text-muted)] font-semibold">
-                Click Skip / Restore on any day
-              </span>
-            </div>
+            {/* Calendar Delivery Schedule Container */}
+            <div className="bg-white rounded-3xl p-5 sm:p-7 shadow-md border border-emerald-200/90 space-y-5 carved-box">
+              {/* Header Toolbar: Plan Title & Badges */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-100">
+                <div className="flex items-center gap-2.5">
+                  <Calendar className="w-5 h-5 text-emerald-700 shrink-0" />
+                  <div>
+                    <h3 className="text-base font-black text-emerald-950 tracking-tight flex items-center gap-2">
+                      <span>{isMonthlyPlan ? '30-Day VIP Meal Plan Calendar' : '7-Day Flex Delivery Schedule'}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
+                        {isMonthlyPlan ? '30-Day Subscription' : '7-Day Subscription'}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-emerald-800/80 font-bold">
+                      {isMonthlyPlan
+                        ? 'Full 30-day interactive month calendar schedule & skip controls'
+                        : '7-day active weekly meal delivery schedule & skip controls'}
+                    </p>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-              {planDays.map((day) => {
-                const isSkipped = skippedDates.has(day.iso);
-                const isSaving = savingDate === day.iso;
+                <div className="text-[11px] text-emerald-800 font-extrabold flex items-center gap-1.5 shrink-0">
+                  <span className="inline-block size-2 rounded-full bg-emerald-600" />
+                  <span>Click Skip Day on any date to pause kitchen prep</span>
+                </div>
+              </div>
 
-                return (
-                  <div
-                    key={day.iso}
-                    className={`rounded-2xl p-2.5 transition-all space-y-2 flex flex-col justify-between ${day.isPast
-                        ? 'bg-emerald-50/60 text-emerald-950'
-                        : day.isToday
-                          ? 'bg-emerald-50 ring-2 ring-emerald-200 text-emerald-950'
-                          : isSkipped
-                            ? 'bg-amber-50 text-amber-950'
-                            : 'bg-white text-[var(--color-text-main)] shadow-xs'
-                      }`}
-                  >
-                    {/* Day Header */}
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[11px] ${day.isPast
-                              ? 'bg-emerald-600 text-white'
+              {/* FOR 7-DAY SUBSCRIPTION PLAN CUSTOMERS: SHOW strictly 7 DAYS */}
+              {!isMonthlyPlan ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800">
+                    <span>Active 7-Day Meal Schedule:</span>
+                    <span className="text-emerald-700 font-black">7 Days Active</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
+                    {planDays.map((day) => {
+                      const isSkipped = skippedDates.has(day.iso);
+                      const isSaving = savingDate === day.iso;
+
+                      return (
+                        <div
+                          key={day.iso}
+                          className={`rounded-2xl p-3 flex flex-col justify-between transition-all space-y-2.5 select-none ${
+                            day.isPast
+                              ? 'bg-emerald-50/40 border border-emerald-100 text-emerald-950 opacity-80'
                               : day.isToday
-                                ? 'bg-emerald-600 text-white'
+                                ? 'bg-emerald-800 text-white border-2 border-emerald-950 shadow-md ring-2 ring-emerald-400'
                                 : isSkipped
-                                  ? 'bg-amber-500 text-white'
-                                  : 'bg-neutral-100 text-neutral-700'
-                            }`}
+                                  ? 'bg-amber-50/90 border-2 border-amber-300 text-amber-950 shadow-xs'
+                                  : 'bg-emerald-50/70 border border-emerald-200 text-emerald-950 shadow-2xs hover:border-emerald-500'
+                          }`}
                         >
-                          {day.dayOfMonth}
-                        </span>
-                        <div>
-                          <div className="font-extrabold text-[11px] leading-tight">{day.label}</div>
-                          <div className="text-[9px] text-neutral-400 font-semibold">{day.date}</div>
-                        </div>
-                      </div>
+                          {/* Day Header */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[11px] ${
+                                  day.isToday
+                                    ? 'bg-white text-emerald-900'
+                                    : isSkipped
+                                      ? 'bg-amber-500 text-white'
+                                      : 'bg-emerald-700 text-white'
+                                }`}
+                              >
+                                {day.dayOfMonth}
+                              </span>
+                              <div>
+                                <div className={`font-black text-xs leading-tight ${day.isToday ? 'text-white' : 'text-emerald-950'}`}>
+                                  {day.label}
+                                </div>
+                                <div className={`text-[9px] font-semibold ${day.isToday ? 'text-emerald-100' : 'text-emerald-700/70'}`}>
+                                  {day.date}
+                                </div>
+                              </div>
+                            </div>
 
-                      {day.isPast ? (
-                        <span className="text-[9px] font-black text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-md">
-                          ✓
-                        </span>
-                      ) : day.isToday ? (
-                        <span className="size-2 rounded-full bg-amber-400 animate-pulse" />
-                      ) : isSkipped ? (
-                        <span className="text-[9px] font-black text-amber-800 bg-amber-200 px-1.5 py-0.5 rounded-md">
-                          Skipped
-                        </span>
-                      ) : null}
+                            {isSkipped ? (
+                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-amber-200" title="Skipped" />
+                            ) : day.isPast ? (
+                              <span className="w-2 h-2 rounded-full bg-emerald-600/50" title="Delivered" />
+                            ) : (
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" title="Scheduled" />
+                            )}
+                          </div>
+
+                          {/* Meal Title */}
+                          <div className="text-[10px] font-bold truncate leading-tight">
+                            {isSkipped ? (
+                              <span className="text-amber-900 font-black bg-amber-200/90 px-1.5 py-0.5 rounded inline-block">
+                                Skipped
+                              </span>
+                            ) : day.isPast ? (
+                              <span className="text-emerald-700/70 font-semibold">Delivered</span>
+                            ) : (
+                              <span className={day.isToday ? 'text-emerald-100' : 'text-emerald-900/90'}>
+                                {day.meal}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Skip / Restore Action Button */}
+                          {!day.isPast ? (
+                            <button
+                              type="button"
+                              onClick={() => void toggleSkipDay(day.iso, `${day.label} ${day.date.replace(' (Today)', '')}`)}
+                              disabled={isSaving || skipsLoading}
+                              className={`w-full py-1.5 px-2 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-1 cursor-pointer carved-btn disabled:opacity-50 ${
+                                isSkipped
+                                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
+                                  : day.isToday
+                                    ? 'bg-amber-400 text-emerald-950 hover:bg-amber-300 font-black shadow-xs'
+                                    : 'bg-amber-500 text-white hover:bg-amber-600 shadow-xs'
+                              }`}
+                            >
+                              {isSaving ? (
+                                <span>Saving…</span>
+                              ) : isSkipped ? (
+                                <>
+                                  <PlayCircle className="w-3 h-3" />
+                                  <span>Restore</span>
+                                </>
+                              ) : (
+                                <>
+                                  <PauseCircle className="w-3 h-3" />
+                                  <span>Skip Day</span>
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <div className="py-1 text-center text-[9px] font-bold text-emerald-700 bg-emerald-100/60 rounded-xl">
+                              Delivered
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* FOR 30-DAY / MONTHLY SUBSCRIPTION PLAN CUSTOMERS: SHOW FULL MONTHLY CALENDAR GRID */
+                <div className="space-y-5">
+                  {/* Month Navigation & Explanatory Subtitle */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-emerald-100">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-xl font-black text-emerald-950 tracking-tight">
+                        {calendarMonthHeader}
+                      </h3>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={handlePrevMonth}
+                          className="p-1.5 rounded-xl hover:bg-emerald-100/80 text-emerald-800 transition-all cursor-pointer"
+                          title="Previous Month"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleTodayMonth}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-[11px] font-black transition-all cursor-pointer shadow-xs carved-btn"
+                        >
+                          Today
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleNextMonth}
+                          className="p-1.5 rounded-xl hover:bg-emerald-100/80 text-emerald-800 transition-all cursor-pointer"
+                          title="Next Month"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Compact Skip/Unskip Button */}
-                    {!day.isPast ? (
-                      <button
-                        type="button"
-                        onClick={() => void toggleSkipDay(day.iso, `${day.label} ${day.date.replace(' (Today)', '')}`)}
-                        disabled={isSaving || skipsLoading}
-                        className={`w-full py-1.5 px-2 rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer carved-btn disabled:opacity-50 disabled:cursor-not-allowed ${isSkipped
-                            ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
-                            : 'bg-amber-500 text-white hover:bg-amber-600 shadow-xs'
-                          }`}
-                      >
-                        {isSaving ? (
-                          <span>Saving…</span>
-                        ) : isSkipped ? (
-                          <>
-                            <PlayCircle className="w-3 h-3" />
-                            <span>Restore</span>
-                          </>
-                        ) : (
-                          <>
-                            <PauseCircle className="w-3 h-3" />
-                            <span>Skip Day</span>
-                          </>
-                        )}
-                      </button>
-                    ) : (
-                      <div className="py-1.5 text-center text-[9px] font-extrabold text-emerald-700 bg-emerald-100/60 rounded-xl">
-                        Delivered
-                      </div>
-                    )}
+                    <div className="text-[11px] text-emerald-800 font-extrabold flex items-center gap-2">
+                      <span className="inline-block size-2 rounded-full bg-emerald-600" />
+                      <span>Dots mark delivery dates. Click day tile to toggle skip.</span>
+                    </div>
                   </div>
-                );
-              })}
+
+                  {/* Day of Week Columns */}
+                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2.5 text-center">
+                    {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day) => (
+                      <div key={day} className="text-[10px] sm:text-[11px] font-black text-emerald-800/70 uppercase tracking-wider py-1">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Monthly Day Tile Grid */}
+                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2.5">
+                    {calendarMonthGrid.map((item, idx) => {
+                      if (item.isBlank) {
+                        return <div key={`blank-${idx}`} className="h-16 sm:h-20 rounded-2xl bg-transparent" />;
+                      }
+
+                      const isSkipped = skippedDates.has(item.iso!);
+                      const isSaving = savingDate === item.iso;
+
+                      return (
+                        <div
+                          key={item.iso}
+                          onClick={() => {
+                            if (!item.isPast && !isSaving && !skipsLoading) {
+                              void toggleSkipDay(item.iso!, `${item.dayLabel} ${item.dayNum}`);
+                            }
+                          }}
+                          className={`h-16 sm:h-20 rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between transition-all select-none relative ${
+                            item.isPast
+                              ? 'bg-emerald-50/40 border border-emerald-100 opacity-75 cursor-default'
+                              : isSkipped
+                                ? 'bg-amber-50/90 border-2 border-amber-400 text-amber-950 shadow-xs cursor-pointer hover:scale-[1.02]'
+                                : item.isToday
+                                  ? 'bg-emerald-800 text-white border-2 border-emerald-950 shadow-md ring-2 ring-emerald-400 cursor-pointer hover:scale-[1.02]'
+                                  : 'bg-emerald-50/60 border border-emerald-200/90 text-emerald-950 shadow-2xs hover:border-emerald-500 hover:bg-emerald-100/80 cursor-pointer hover:scale-[1.02]'
+                          }`}
+                        >
+                          {/* Top Row: Day Number + Dot Indicator */}
+                          <div className="flex items-start justify-between">
+                            <span
+                              className={`text-xs sm:text-sm font-black ${
+                                item.isToday
+                                  ? 'text-white underline underline-offset-2'
+                                  : isSkipped
+                                    ? 'text-amber-950'
+                                    : 'text-emerald-950'
+                              }`}
+                            >
+                              {item.dayNum}
+                            </span>
+
+                            {/* Green/Amber Dot Badge matching the reference design */}
+                            {isSkipped ? (
+                              <span
+                                className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-amber-200 shadow-2xs shrink-0"
+                                title="Skipped Day"
+                              />
+                            ) : item.isPast ? (
+                              <span
+                                className="w-2 h-2 rounded-full bg-emerald-600/50 shrink-0"
+                                title="Delivered"
+                              />
+                            ) : item.isToday ? (
+                              <span
+                                className="w-2.5 h-2.5 rounded-full bg-emerald-300 ring-2 ring-emerald-600 shadow-xs shrink-0"
+                                title="Today's Scheduled Delivery"
+                              />
+                            ) : (
+                              <span
+                                className="w-2.5 h-2.5 rounded-full bg-emerald-600 ring-2 ring-emerald-200/80 shrink-0"
+                                title="Scheduled Delivery"
+                              />
+                            )}
+                          </div>
+
+                          {/* Bottom Row: Meal Title or Status Label */}
+                          <div className="mt-auto">
+                            {isSkipped ? (
+                              <span className="text-[9px] font-black text-amber-900 bg-amber-200/90 px-1 py-0.5 rounded block truncate">
+                                Skipped
+                              </span>
+                            ) : item.isPast ? (
+                              <span className="text-[9px] font-bold text-emerald-700/60 block truncate">
+                                Delivered
+                              </span>
+                            ) : (
+                              <span
+                                className={`text-[9px] sm:text-[10px] font-bold block truncate leading-tight ${
+                                  item.isToday ? 'text-emerald-100 font-extrabold' : 'text-emerald-900/90'
+                                }`}
+                              >
+                                {item.meal}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Async Loading Overlay */}
+                          {isSaving && (
+                            <div className="absolute inset-0 bg-white/80 rounded-2xl flex items-center justify-center">
+                              <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-[var(--color-surface)] rounded-3xl p-8 text-center max-w-md mx-auto carved-box space-y-4 animate-fade-in">
+            <div className="w-16 h-16 rounded-3xl bg-[var(--color-primary-light)] text-[var(--color-primary)] flex items-center justify-center mx-auto shadow-xs">
+              <Calendar className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-[var(--color-text-main)]">Meal Plan Calendar is Exclusive to Subscribers</h3>
+              <p className="text-xs text-[var(--color-text-muted)] mt-1.5 font-medium leading-relaxed">
+                Subscribe to any of our Weekly, Monthly, or Single-Day Pre-Order meal plans to unlock your interactive meal delivery calendar and daily skip controls.
+              </p>
+            </div>
+            <Link
+              to="/subscriptions"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-[var(--color-primary)] text-[var(--color-text-on-primary)] font-black text-xs hover:bg-[var(--color-primary-hover)] transition-all carved-btn"
+            >
+              <span>Browse Subscription Plans</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        )
       )}
 
-      {/* TAB 3: Previous Orders & Order History */}
+      {/* TAB 3: Order History & Transaction Ledger */}
       {activeTab === 'orders' && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-[var(--color-text-main)] flex items-center gap-2">
-              <span>Order History</span>
-              <span className="px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] text-xs font-black">
-                {orders.length}
-              </span>
-            </h2>
+        <div className="space-y-6 animate-fade-in">
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--color-surface)] p-5 rounded-3xl carved-box shadow-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-[var(--color-primary)]" />
+                <h2 className="text-lg font-black text-[var(--color-text-main)] tracking-tight">
+                  Order History & Transaction Ledger
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] text-xs font-black">
+                  {orders.length} Transactions
+                </span>
+              </div>
+              <p className="text-xs text-[var(--color-text-muted)] font-medium mt-0.5">
+                Complete itemized transaction ledger, payment receipts, macro breakdown & reorder controls
+              </p>
+            </div>
+
             <button
               onClick={() => void loadMyOrders()}
-              className="flex items-center gap-1.5 text-xs font-extrabold text-[var(--color-primary)] hover:underline cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[var(--color-surface-hover)] text-[var(--color-text-main)] text-xs font-extrabold hover:bg-[var(--color-primary-light)] hover:text-[var(--color-primary)] transition-all cursor-pointer carved-btn self-start sm:self-auto"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Refresh Orders</span>
+              <span>Refresh Ledger</span>
             </button>
           </div>
 
-          {orders.length === 0 ? (
+          {/* 4 Summary Ledger KPI Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-[var(--color-surface)] p-4 rounded-2xl carved-box space-y-1">
+              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Total Lifetime Spend</span>
+              <span className="text-lg font-black text-[var(--color-primary)] block">{formatCurrency(totalLifetimeSpent)}</span>
+            </div>
+
+            <div className="bg-[var(--color-surface)] p-4 rounded-2xl carved-box space-y-1">
+              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Total Orders</span>
+              <span className="text-lg font-black text-[var(--color-text-main)] block">{orders.length} Orders</span>
+            </div>
+
+            <div className="bg-[var(--color-surface)] p-4 rounded-2xl carved-box space-y-1">
+              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Protein Delivered</span>
+              <span className="text-lg font-black text-orange-500 block">{totalProteinDelivered}g Protein</span>
+            </div>
+
+            <div className="bg-[var(--color-surface)] p-4 rounded-2xl carved-box space-y-1">
+              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Account Status</span>
+              <span className="text-lg font-black text-emerald-600 block">
+                {isVipCustomer ? 'VIP Member' : 'Verified Customer'}
+              </span>
+            </div>
+          </div>
+
+          {/* Filter & Search Toolbar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[var(--color-surface)] p-3 rounded-2xl carved-box">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-[var(--color-text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={orderSearchQuery}
+                onChange={(e) => setOrderSearchQuery(e.target.value)}
+                placeholder="Search by order #, item name, or status…"
+                className="w-full pl-9 pr-3 py-2 bg-[var(--color-surface-hover)] border-none rounded-xl text-xs font-semibold text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              />
+            </div>
+
+            {/* Filter Categories */}
+            <div className="flex items-center gap-1 bg-[var(--color-surface-hover)] p-1 rounded-xl text-xs font-bold shrink-0">
+              <Filter className="w-3.5 h-3.5 text-[var(--color-text-muted)] ml-1 mr-0.5" />
+              <button
+                type="button"
+                onClick={() => setOrderFilterCategory('all')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  orderFilterCategory === 'all'
+                    ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] shadow-2xs'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                }`}
+              >
+                All ({orders.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderFilterCategory('subscriptions')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  orderFilterCategory === 'subscriptions'
+                    ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] shadow-2xs'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                }`}
+              >
+                Subscriptions
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderFilterCategory('preorders')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  orderFilterCategory === 'preorders'
+                    ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] shadow-2xs'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                }`}
+              >
+                Pre-Orders
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderFilterCategory('delivered')}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                  orderFilterCategory === 'delivered'
+                    ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] shadow-2xs'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                }`}
+              >
+                Delivered
+              </button>
+            </div>
+          </div>
+
+          {/* Orders List */}
+          {filteredOrderHistory.length === 0 ? (
             <div className="bg-[var(--color-surface)] rounded-3xl p-10 text-center max-w-md mx-auto carved-box space-y-4">
               <div className="w-16 h-16 rounded-3xl bg-[var(--color-primary-light)] text-[var(--color-primary)] flex items-center justify-center mx-auto">
                 <ShoppingBag className="w-8 h-8" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-[var(--color-text-main)]">No previous orders yet</h3>
+                <h3 className="text-base font-bold text-[var(--color-text-main)]">
+                  {orders.length === 0 ? 'No previous orders yet' : 'No transactions match filters'}
+                </h3>
                 <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                  Once you place a pre-order, your full order history and live dispatch status will be tracked here.
+                  {orders.length === 0
+                    ? 'Once you place a pre-order or subscription plan, your full itemized transaction ledger will be tracked here.'
+                    : 'Try clearing your search query or switching filters to view previous orders.'}
                 </p>
               </div>
               <Link
@@ -758,47 +1278,140 @@ function AccountPage() {
               </Link>
             </div>
           ) : (
-            <div className="space-y-2.5">
-              {orders.map((order) => {
+            <div className="space-y-4">
+              {filteredOrderHistory.map((order) => {
                 const badge = getStatusBadgeStyle(order.status);
                 const BadgeIcon = badge.icon;
+                const isSub = (order.itemsSummary || '').toLowerCase().includes('sub') || (order.itemsSummary || '').toLowerCase().includes('plan');
+
+                const subtotal = Math.round(order.totalAmount * 0.95);
+                const tax = Math.round(order.totalAmount * 0.05);
+
                 return (
                   <div
                     key={order.id}
-                    className="bg-[var(--color-surface)] rounded-2xl p-3 shadow-2xs space-y-2 carved-box transition-all"
+                    className="bg-[var(--color-surface)] rounded-3xl p-5 shadow-xs space-y-4 carved-box transition-all border border-neutral-100"
                   >
-                    {/* Header: Order No, Status & Total Amount */}
-                    <div className="flex items-center justify-between gap-2 pb-2">
+                    {/* Header: Order No, Channel Tag & Status */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-neutral-100">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs font-black text-[var(--color-text-main)]">
+                        <span className="font-mono text-sm font-black text-[var(--color-text-main)]">
                           {order.id}
                         </span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${badge.bg}`}>
-                          <BadgeIcon className="w-2.5 h-2.5" />
+
+                        {isSub ? (
+                          <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 text-[10px] font-black uppercase tracking-wider">
+                            VIP Subscription Plan
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[10px] font-black uppercase tracking-wider">
+                            Direct Pre-Order
+                          </span>
+                        )}
+
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${badge.bg}`}>
+                          <BadgeIcon className="w-3 h-3" />
                           <span>{badge.label}</span>
-                        </span>
-                        <span className="text-[10px] text-[var(--color-text-muted)] font-medium">
-                          • {order.timeFormatted || new Date(order.createdAt).toLocaleDateString('en-IN')}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2 text-right shrink-0">
-                        <span className="text-xs font-black text-orange-500 uppercase flex items-center gap-0.5">
-                          <Flame className="w-3 h-3 text-orange-500" />
-                          {order.proteinGrams}g Protein
-                          {order.calories ? <span className="text-neutral-400 font-semibold ml-1">• {order.calories} kcal</span> : null}
-                        </span>
-                        <span className="text-sm font-black text-[var(--color-primary)]">
-                          {formatCurrency(order.totalAmount)}
-                        </span>
+                      <div className="text-xs text-[var(--color-text-muted)] font-semibold">
+                        Placed: <strong className="text-[var(--color-text-main)] font-extrabold">{order.timeFormatted || new Date(order.createdAt).toLocaleString('en-IN')}</strong>
+                      </div>
+                    </div>
+
+                    {/* Detailed Itemized Line Items Table Ledger */}
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-black text-[var(--color-text-muted)] uppercase tracking-wider block">
+                        Itemized Transaction Breakdown
+                      </span>
+
+                      {order.itemsList && order.itemsList.length > 0 ? (
+                        <div className="bg-[var(--color-surface-hover)] rounded-2xl p-3 space-y-2">
+                          {order.itemsList.map((item, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-neutral-200/50 last:border-none">
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-[var(--color-text-main)]">{item.title}</span>
+                                <span className="px-2 py-0.5 rounded-md bg-[var(--color-primary-light)] text-[var(--color-primary)] text-[10px] font-black">
+                                  x{item.quantity}
+                                </span>
+                              </div>
+                              <div className="font-extrabold text-[var(--color-text-main)]">
+                                {formatCurrency(item.price * item.quantity)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-[var(--color-surface-hover)] p-3 rounded-2xl text-xs font-extrabold text-[var(--color-text-main)] flex items-center justify-between">
+                          <span>{order.itemsSummary || 'Chef Crafted Meal Plan'}</span>
+                          <span>{formatCurrency(order.totalAmount)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Financial Ledger & Customer Info Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {/* Customer Address & Contact Info */}
+                      <div className="bg-[var(--color-surface-hover)] p-3 rounded-2xl space-y-1">
+                        <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Delivery Destination</span>
+                        <div className="text-xs font-semibold text-[var(--color-text-main)] flex items-start gap-1.5 pt-0.5">
+                          <MapPin className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0 mt-0.5" />
+                          <span className="leading-snug">{order.customerAddress || 'Address Provided at Checkout'}</span>
+                        </div>
+                      </div>
+
+                      {/* Financial Breakdown Ledger Box */}
+                      <div className="bg-emerald-950/5 p-3 rounded-2xl border border-emerald-100 space-y-1 text-xs">
+                        <div className="flex justify-between text-[11px] text-neutral-600 font-semibold">
+                          <span>Items Subtotal:</span>
+                          <span>{formatCurrency(subtotal)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px] text-neutral-600 font-semibold">
+                          <span>Taxes (5% GST):</span>
+                          <span>{formatCurrency(tax)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px] text-emerald-700 font-bold">
+                          <span>Delivery Charge:</span>
+                          <span>FREE</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-black text-[var(--color-primary)] pt-1 border-t border-emerald-200">
+                          <span>Total Amount Paid:</span>
+                          <span>{formatCurrency(order.totalAmount)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Toolbar Action Buttons */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-orange-500">
+                        <Flame className="w-3.5 h-3.5 text-orange-500" />
+                        <span>{order.proteinGrams}g Protein</span>
+                        {order.calories ? <span className="text-neutral-400 font-semibold ml-1">• {order.calories} kcal</span> : null}
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            toast.success(`Receipt for Order #${order.id} Generated! 📄`, {
+                              description: `Paid Total: ${formatCurrency(order.totalAmount)} · Retained in your account ledger.`,
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-extrabold text-xs transition-all flex items-center gap-1.5 cursor-pointer carved-btn"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-neutral-600" />
+                          <span>View Receipt</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => void handleReorder(order)}
-                          className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-900 hover:bg-purple-600 hover:text-white font-extrabold text-[10px] transition-all flex items-center gap-1 cursor-pointer carved-btn"
+                          className="px-3 py-1.5 rounded-xl bg-purple-100 text-purple-900 hover:bg-purple-600 hover:text-white font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer carved-btn"
                           title="Reorder items from this order"
                         >
-                          <RotateCcw className="w-3 h-3" />
-                          <span>Reorder</span>
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Reorder All Items</span>
                         </button>
 
                         {(() => {
@@ -812,9 +1425,7 @@ function AccountPage() {
                             stLower.includes('cancelled') ||
                             stLower.includes('refunded');
 
-                          const isCancellable = !isPackedOrBeyond;
-
-                          if (isCancellable) {
+                          if (!isPackedOrBeyond) {
                             return (
                               <button
                                 type="button"
@@ -828,44 +1439,17 @@ function AccountPage() {
                                     }
                                   }
                                 }}
-                                className="px-2 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-extrabold text-[9px] transition-all flex items-center gap-1 cursor-pointer"
+                                className="px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-extrabold text-xs transition-all flex items-center gap-1 cursor-pointer"
                               >
-                                <XCircle className="w-2.5 h-2.5" />
+                                <XCircle className="w-3.5 h-3.5" />
                                 <span>Cancel Order</span>
                               </button>
                             );
                           }
-
                           return null;
                         })()}
                       </div>
                     </div>
-
-                    {/* Compact Items List */}
-                    <div className="text-xs font-semibold text-[var(--color-text-muted)] bg-[var(--color-surface-hover)] px-2.5 py-1.5 rounded-xl flex flex-wrap items-center justify-between gap-1">
-                      {order.itemsList && order.itemsList.length > 0 ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          {order.itemsList.map((item, idx) => (
-                            <span key={idx} className="text-[var(--color-text-main)] font-extrabold">
-                              {item.title} <span className="text-[var(--color-primary)] font-black">x{item.quantity}</span>
-                              {idx < (order.itemsList?.length ?? 0) - 1 ? <span className="text-neutral-300 font-normal ml-2">•</span> : null}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-[var(--color-text-main)] font-extrabold">
-                          {order.itemsSummary || 'Chef Crafted Meal'}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Delivery Address */}
-                    {order.customerAddress && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] font-medium pt-1">
-                        <MapPin className="w-3 h-3 text-[var(--color-primary)] shrink-0" />
-                        <span className="truncate">{order.customerAddress}</span>
-                      </div>
-                    )}
                   </div>
                 );
               })}

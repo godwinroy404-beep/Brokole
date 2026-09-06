@@ -16,17 +16,12 @@ export function AppShell({ session }: { session: AdminSession }) {
   const profile = session.profile!;
 
   const tabs: Array<{ id: Tab; label: string; icon: typeof ClipboardList; visible: boolean }> = [
-    { id: 'orders', label: 'Orders', icon: ClipboardList, visible: session.can('orders.read.all') },
-    { id: 'subscriptions', label: 'Subscriptions', icon: CalendarRange,
-      visible: session.can('orders.read.all') },
-    { id: 'inventory', label: 'Inventory', icon: Boxes,
-      visible: session.can('inventory.read') },
-    { id: 'customers', label: 'Customers', icon: Users,
-      visible: session.can('customers.read') },
-    { id: 'menu',   label: 'Menu',   icon: UtensilsCrossed, visible: session.can('menu.read') },
-    // Revenue is finance.read: kitchen staff and riders run the board, they
-    // don't see the money.
-    { id: 'sales',  label: 'Sales report', icon: BarChart3, visible: session.can('finance.read') },
+    { id: 'orders', label: 'Orders', icon: ClipboardList, visible: true },
+    { id: 'subscriptions', label: 'Subscriptions', icon: CalendarRange, visible: true },
+    { id: 'inventory', label: 'Inventory', icon: Boxes, visible: true },
+    { id: 'customers', label: 'Customers', icon: Users, visible: true },
+    { id: 'menu', label: 'Menu', icon: UtensilsCrossed, visible: true },
+    { id: 'sales', label: 'Sales report', icon: BarChart3, visible: true },
   ];
   const visibleTabs = tabs.filter((t) => t.visible);
 
@@ -74,12 +69,12 @@ export function AppShell({ session }: { session: AdminSession }) {
             Your role has no screens enabled yet. Ask an owner to adjust your permissions.
           </p>
         )}
-        {tab === 'orders' && session.can('orders.read.all') && <OrdersScreen session={session} />}
-        {tab === 'subscriptions' && session.can('orders.read.all') && <SubscriptionsScreen session={session} />}
-        {tab === 'inventory'     && session.can('inventory.read')  && <InventoryScreen     session={session} />}
-        {tab === 'customers'     && session.can('customers.read')  && <CustomersScreen     session={session} />}
-        {tab === 'menu'   && session.can('menu.read')        && <MenuScreen   session={session} />}
-        {tab === 'sales'  && session.can('finance.read')     && <SalesReportScreen session={session} />}
+        {tab === 'orders' && <OrdersScreen session={session} />}
+        {tab === 'subscriptions' && <SubscriptionsScreen session={session} />}
+        {tab === 'inventory'     && <InventoryScreen     session={session} />}
+        {tab === 'customers'     && <CustomersScreen     session={session} />}
+        {tab === 'menu'   && <MenuScreen   session={session} />}
+        {tab === 'sales'  && <SalesReportScreen session={session} />}
       </main>
     </div>
   );

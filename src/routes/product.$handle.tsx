@@ -109,13 +109,13 @@ function ProductDetailPage() {
             />
             {/* Delivery / Out of Stock Badge Overlay */}
             {!isAvailable ? (
-              <div className="absolute top-4 left-4 px-3.5 py-1.5 rounded-full bg-amber-500 text-neutral-950 text-xs font-black flex items-center gap-1.5 z-10 shadow-md">
+              <div className="absolute top-4 left-4 px-3.5 py-1.5 rounded-full bg-emerald-500 text-neutral-950 text-xs font-black flex items-center gap-1.5 z-10 shadow-md">
                 <AlertCircle className="w-4 h-4" />
                 <span>Out of Stock / Sold Out</span>
               </div>
             ) : (
               <div className="absolute top-4 left-4 px-3.5 py-1.5 rounded-full bg-black/70 backdrop-blur-md text-white text-xs font-bold flex items-center gap-1.5 z-10 shadow-md">
-                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400 animate-pulse" />
+                <Zap className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400 animate-pulse" />
                 <span>Pre-Order Fresh Delivery</span>
               </div>
             )}
@@ -149,8 +149,8 @@ function ProductDetailPage() {
                 {product.productType || 'Chef Special'}
               </span>
               {!isAvailable ? (
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-amber-800 text-xs font-extrabold flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-extrabold flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5 text-emerald-600" />
                   Currently Out of Stock
                 </span>
               ) : (

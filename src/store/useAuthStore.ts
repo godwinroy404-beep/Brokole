@@ -77,9 +77,13 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { user } = await api.get<{ user: ApiUser }>('/auth/me');
           set({ user: toProfile(user, get().user), isLoggedIn: true });
-        } catch {
-          // Expired or revoked token — api.ts has already cleared it.
-          set({ user: null, isLoggedIn: false });
+        } catch (e) {
+          // Only clear user session if the server explicitly returned HTTP 401 Unauthorized.
+          // Retain local session on network errors or offline mode.
+          if (e instanceof ApiError && e.status === 401) {
+            setToken(null);
+            set({ user: null, isLoggedIn: false });
+          }
         }
       },
 

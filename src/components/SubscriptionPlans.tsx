@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCartStore } from '../store/useCartStore';
 import { useMacroStore } from '../store/useMacroStore';
+import { useProductStore } from '../store/useProductStore';
 import { Product } from '../lib/shopify';
 import { formatCurrency } from '../lib/nutritionParser';
 import {
@@ -19,6 +20,10 @@ import {
   Target,
   X,
   ArrowRight,
+  Search,
+  BookOpen,
+  ChevronDown,
+  CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,6 +31,7 @@ export interface PlanTier {
   id: string;
   name: string;
   tagline: string;
+  tomorrowPrice: number;
   weeklyPrice: number;
   monthlyPrice: number;
   mealsPerDay: number;
@@ -72,7 +78,7 @@ const FITNESS_GOALS: FitnessGoalOption[] = [
   {
     id: 'athletic',
     label: 'Athletic Performance & Energy',
-    badge: '⚡ Peak Performance',
+    badge: 'Peak Performance',
     icon: Zap,
     desc: 'Clean complex carbs & protein fueling intense workouts, stamina & endurance.',
     dietMatch: 'High Protein',
@@ -84,6 +90,7 @@ const SUBSCRIPTION_PLANS: PlanTier[] = [
     id: 'plan-weekly-flex',
     name: 'Weekly Flex Plan',
     tagline: 'Ideal for trying out macro-balanced eating with complete flexibility.',
+    tomorrowPrice: 299,
     weeklyPrice: 1899,
     monthlyPrice: 5999,
     mealsPerDay: 2,
@@ -99,6 +106,7 @@ const SUBSCRIPTION_PLANS: PlanTier[] = [
     id: 'plan-shred-gain',
     name: 'Shred & Gain Pro',
     tagline: 'Our #1 most popular plan for rapid fitness transformation and muscle gain.',
+    tomorrowPrice: 399,
     weeklyPrice: 2399,
     monthlyPrice: 7499,
     mealsPerDay: 2,
@@ -117,6 +125,7 @@ const SUBSCRIPTION_PLANS: PlanTier[] = [
     id: 'plan-athlete-pro',
     name: 'Elite Athlete Plan',
     tagline: 'Complete 3-meal daily nutrition suite engineered for serious athletes.',
+    tomorrowPrice: 499,
     weeklyPrice: 2899,
     monthlyPrice: 8999,
     mealsPerDay: 3,
@@ -137,9 +146,99 @@ export const SubscriptionPlans: React.FC = () => {
   const setMacroProfile = useMacroStore((state) => state.setProfile);
   const macroProfile = useMacroStore((state) => state.profile);
 
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'weekly'>('monthly');
+  const storeProducts = useProductStore((state) => state.products);
+  const loadProducts = useProductStore((state) => state.loadProducts);
+
+  const [billingCycle, setBillingCycle] = useState<'tomorrow' | 'weekly' | 'monthly'>('tomorrow');
   const [selectedDiet, setSelectedDiet] = useState<string>('High Protein');
   const [selectedSlot, setSelectedSlot] = useState<string>('Lunch & Dinner (12 PM & 7 PM)');
+
+  // Full Menu Picker State
+  const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
+  const [menuSearchQuery, setMenuSearchQuery] = useState('');
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  // Pre-Order for Tomorrow State
+  const [tomorrowSlot, setTomorrowSlot] = useState<string>('Lunch (12:00 PM - 2:00 PM)');
+  const [selectedTomorrowMeal, setSelectedTomorrowMeal] = useState<{
+    id: string;
+    name: string;
+    price: number;
+    protein: number;
+    calories: number;
+    image: string;
+  }>({
+    id: '',
+    name: '',
+    price: 0,
+    protein: 0,
+    calories: 0,
+    image: '/images/hero_bowl.png',
+  });
+
+  const TOMORROW_MEALS = [
+    {
+      id: 'pre-chicken-rice',
+      name: 'High-Protein Chicken & Brown Rice Bowl',
+      price: 360,
+      protein: 48,
+      calories: 580,
+      image: '/images/grilled_chicken_bowl.png',
+    },
+    {
+      id: 'pre-quinoa-paneer',
+      name: 'Quinoa Paneer Fitness Bowl',
+      price: 380,
+      protein: 42,
+      calories: 520,
+      image: '/images/quinoa_paneer_bowl.png',
+    },
+    {
+      id: 'pre-salmon-power',
+      name: 'Grilled Atlantic Salmon & Roasted Veggies',
+      price: 450,
+      protein: 52,
+      calories: 610,
+      image: '/images/salmon_bowl.png',
+    },
+  ];
+
+  const tomorrowObj = new Date(Date.now() + 86400000);
+  const formattedTomorrow = tomorrowObj.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  const handleBookForTomorrow = () => {
+    if (!selectedTomorrowMeal.name || selectedTomorrowMeal.price === 0) {
+      toast.error('Please select a meal for tomorrow first!');
+      return;
+    }
+    const preOrderProduct: Product = {
+      id: `preorder-${selectedTomorrowMeal.id}-${Date.now()}`,
+      handle: `preorder-${selectedTomorrowMeal.id}`,
+      title: `${selectedTomorrowMeal.name} (Pre-Booked for Tomorrow)`,
+      productType: 'Pre-Order Delivery',
+      tags: ['Pre-Order', 'Tomorrow Delivery', tomorrowSlot],
+      description: `Scheduled Dispatch: Tomorrow (${formattedTomorrow}) during ${tomorrowSlot}\nProtein: ${selectedTomorrowMeal.protein}g | Calories: ${selectedTomorrowMeal.calories} kcal`,
+      featuredImage: { url: selectedTomorrowMeal.image, altText: selectedTomorrowMeal.name },
+      images: [{ url: selectedTomorrowMeal.image, altText: selectedTomorrowMeal.name }],
+      priceRange: { minVariantPrice: { amount: selectedTomorrowMeal.price.toString(), currencyCode: 'INR' } },
+      variants: [{ id: `var-${Date.now()}`, title: `Tomorrow (${tomorrowSlot})`, price: { amount: selectedTomorrowMeal.price.toString(), currencyCode: 'INR' }, availableForSale: true }],
+      nutrition: { protein: selectedTomorrowMeal.protein, calories: selectedTomorrowMeal.calories, carbs: 45, fat: 14, fiber: 8 },
+      prepTime: `Tomorrow (${tomorrowSlot})`,
+    };
+
+    addItem(preOrderProduct);
+    toast.success(`Pre-Booked for Tomorrow (${formattedTomorrow})! 🎉`, {
+      description: `${selectedTomorrowMeal.name} reserved for ${tomorrowSlot} dispatch`,
+    });
+    openCart();
+  };
 
   // Modal State for asking Goal upon clicking Subscribe
   const [pendingPlan, setPendingPlan] = useState<PlanTier | null>(null);
@@ -162,17 +261,25 @@ export const SubscriptionPlans: React.FC = () => {
     // Sync user macro profile
     setMacroProfile({ goal: goal.id as any });
 
+    const isTomorrow = billingCycle === 'tomorrow';
     const isMonthly = billingCycle === 'monthly';
-    const price = isMonthly ? plan.monthlyPrice : plan.weeklyPrice;
-    const duration = isMonthly ? '30-Day Monthly' : '7-Day Weekly';
+    const price = isTomorrow ? plan.tomorrowPrice : (isMonthly ? plan.monthlyPrice : plan.weeklyPrice);
+    const duration = isTomorrow ? `Single-Day Pre-Order (${formattedTomorrow})` : (isMonthly ? '30-Day Monthly' : '7-Day Weekly');
 
     const customSubscriptionProduct: Product = {
       id: `sub-${plan.id}-${billingCycle}-${goal.id}`,
       handle: `subscription-${plan.id}`,
       title: `Bro-Ko-Le ${plan.name} (${duration})`,
-      productType: 'Meal Subscription',
-      tags: ['Subscription', 'Meal Plan', plan.name, selectedDiet, goal.label],
-      description: `${plan.name} (${duration} Subscription)\n\nPrimary Fitness Goal: ${goal.label} (${goal.badge})\nDietary Focus: ${selectedDiet}\nDelivery Window: ${selectedSlot}\nDaily Protein Target: ${plan.proteinPerDay}g/day\n\nFeatures:\n` + plan.features.join('\n'),
+      productType: isTomorrow ? 'Pre-Order Delivery' : 'Meal Subscription',
+      tags: [
+        isTomorrow ? 'Pre-Order' : 'Subscription',
+        'Meal Plan',
+        plan.name,
+        selectedDiet,
+        goal.label,
+        ...(isTomorrow ? ['Tomorrow Delivery', formattedTomorrow] : []),
+      ],
+      description: `${plan.name} (${duration})\n\nPrimary Fitness Goal: ${goal.label} (${goal.badge})\nDietary Focus: ${selectedDiet}\nDelivery Window: ${selectedSlot}\nDaily Protein Target: ${plan.proteinPerDay}g/day\n\nFeatures:\n` + plan.features.join('\n'),
       featuredImage: {
         url: '/images/grilled_chicken_bowl.png',
         altText: plan.name,
@@ -199,11 +306,11 @@ export const SubscriptionPlans: React.FC = () => {
         fat: plan.mealsPerDay * 12,
         fiber: plan.mealsPerDay * 6,
       },
-      prepTime: 'Daily Fresh Delivery',
+      prepTime: isTomorrow ? `Tomorrow Dispatch (${formattedTomorrow})` : 'Daily Fresh Delivery',
     };
 
     addItem(customSubscriptionProduct);
-    toast.success(`Subscribed to ${plan.name}! 🎉`, {
+    toast.success(isTomorrow ? `Pre-Booked for Tomorrow! 🎉` : `Subscribed to ${plan.name}! 🎉`, {
       description: `Goal: ${goal.label} • ${duration} Plan (${formatCurrency(price)}) added to cart`,
     });
 
@@ -232,24 +339,236 @@ export const SubscriptionPlans: React.FC = () => {
         </div>
       </div>
 
+      {/* 🚀 BOOK FOR TOMORROW PRE-ORDER SECTION */}
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 shadow-card relative overflow-hidden space-y-6 carved-box">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-[var(--color-primary-light)] opacity-40 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Section Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--color-border-subtle)] pb-5 relative z-10">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] text-xs font-black mb-2 border border-[var(--color-primary-muted)]/20">
+              <Clock className="w-3.5 h-3.5 animate-pulse text-[var(--color-accent)]" />
+              <span>NEXT-DAY KITCHEN PRE-ORDER</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-[var(--color-text-main)] flex items-center gap-2">
+              <span>Book Meal Delivery for Tomorrow</span>
+              <span className="px-2.5 py-0.5 rounded-xl bg-[var(--color-accent)] text-[var(--color-text-on-accent)] text-xs font-black uppercase">
+                {formattedTomorrow}
+              </span>
+            </h2>
+            <p className="text-xs sm:text-sm text-[var(--color-text-muted)] font-medium mt-1">
+              Guarantee fresh dietitian-formulated meal dispatch directly to your doorstep tomorrow.
+            </p>
+          </div>
+
+          <div className="bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-2xl px-4 py-2.5 text-center sm:text-right shrink-0">
+            <span className="text-[10px] font-black uppercase tracking-wider text-[var(--color-primary)] block">
+              Kitchen Pre-Order Cutoff
+            </span>
+            <span className="text-xs font-mono font-bold text-[var(--color-text-main)]">
+              Order within <strong className="text-[var(--color-primary)] font-black">04h : 18m : 30s</strong> for guaranteed tomorrow dispatch
+            </span>
+          </div>
+        </div>
+
+        {/* Dispatch Slot & Meal Pick Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative z-10">
+          
+          {/* Left Column: Delivery Slot Selector */}
+          <div className="lg:col-span-5 space-y-4">
+            <label className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-primary)] flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>1. Select Tomorrow's Dispatch Slot</span>
+            </label>
+
+            <div className="space-y-2">
+              {[
+                { slot: 'Lunch (12:00 PM - 2:00 PM)', label: '🍳 Lunch Dispatch', time: '12 PM - 2 PM' },
+                { slot: 'Dinner (7:00 PM - 9:00 PM)', label: '🌆 Dinner Dispatch', time: '7 PM - 9 PM' },
+                { slot: 'Morning (8:00 AM - 10:00 AM)', label: '🌅 Morning Dispatch', time: '8 AM - 10 AM' },
+              ].map((s) => {
+                const isSelected = tomorrowSlot === s.slot;
+                return (
+                  <button
+                    key={s.slot}
+                    type="button"
+                    onClick={() => setTomorrowSlot(s.slot)}
+                    className={`w-full p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between carved-btn ${
+                      isSelected
+                        ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)] font-extrabold shadow-xs ring-1 ring-[var(--color-primary-muted)]'
+                        : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text-main)] hover:bg-[var(--color-surface)]'
+                    }`}
+                  >
+                    <div>
+                      <span className="font-extrabold text-xs block text-[var(--color-text-main)]">{s.label}</span>
+                      <span className="text-[11px] text-[var(--color-text-muted)]">{s.time}</span>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right Column: Pre-Order Meal Selection */}
+          <div className="lg:col-span-7 space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-primary)] flex items-center gap-1.5">
+                <Utensils className="w-3.5 h-3.5" />
+                <span>2. Select Meal for Tomorrow</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setIsMenuModalOpen(true)}
+                className="text-xs font-bold text-[var(--color-primary)] hover:underline flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-[var(--color-accent-hover)]" />
+                <span>Browse Full Menu ({storeProducts.length})</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {TOMORROW_MEALS.map((meal) => {
+                const isSelected = selectedTomorrowMeal.id === meal.id;
+                return (
+                  <div
+                    key={meal.id}
+                    onClick={() => setSelectedTomorrowMeal(meal)}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between carved-btn ${
+                      isSelected
+                        ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] ring-2 ring-[var(--color-accent-glow)] shadow-xs'
+                        : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] hover:border-[var(--color-primary-muted)]'
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <img
+                        src={meal.image}
+                        alt={meal.name}
+                        className="w-full h-20 rounded-xl object-cover border border-[var(--color-border)] shadow-xs"
+                      />
+                      <div>
+                        <span className="text-xs font-extrabold text-[var(--color-text-main)] line-clamp-2 leading-snug">
+                          {meal.name}
+                        </span>
+                        <span className="text-[10px] text-[var(--color-primary)] font-bold block mt-1">
+                          🔥 {meal.protein}g Protein · {meal.calories} kcal
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2.5 border-t border-[var(--color-border)] mt-2">
+                      <span className="text-xs font-black text-[var(--color-text-main)]">{formatCurrency(meal.price)}</span>
+                      {isSelected ? (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-[var(--color-accent)] text-[var(--color-text-on-accent)]">
+                          SELECTED
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-extrabold text-[var(--color-text-muted)]">Select</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Compact Menu Select & Pre-Book Action Button */}
+            <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+              
+              {/* Compact Menu Select */}
+              <div className="relative w-full sm:w-64 shrink-0">
+                <select
+                  value={selectedTomorrowMeal.id}
+                  onChange={(e) => {
+                    const found = storeProducts.find((p) => p.id === e.target.value);
+                    if (found) {
+                      const mealPrice = parseFloat(found.priceRange.minVariantPrice.amount);
+                      setSelectedTomorrowMeal({
+                        id: found.id,
+                        name: found.title,
+                        price: mealPrice,
+                        protein: found.nutrition.protein,
+                        calories: found.nutrition.calories,
+                        image: found.featuredImage.url,
+                      });
+                      toast.success(`Selected "${found.title}" for Tomorrow!`, {
+                        description: `${found.nutrition.protein}g Protein • ${formatCurrency(mealPrice)}`,
+                      });
+                    }
+                  }}
+                  className="w-full py-2.5 px-3 pr-8 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-extrabold text-[var(--color-text-main)] appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] shadow-xs truncate"
+                >
+                  <option value="" disabled>-- Select Meal --</option>
+                  {storeProducts.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title} • {formatCurrency(parseFloat(p.priceRange.minVariantPrice.amount))} ({p.nutrition.protein}g P)
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 text-[var(--color-text-muted)] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
+              {/* Action Button */}
+              <button
+                type="button"
+                onClick={handleBookForTomorrow}
+                className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text-on-accent)] font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.99] carved-btn shrink-0"
+              >
+                <span>
+                  {selectedTomorrowMeal.name
+                    ? `Pre-Book ${selectedTomorrowMeal.name} for Tomorrow (${formatCurrency(selectedTomorrowMeal.price)})`
+                    : 'Pre-Book Meal for Tomorrow'}
+                </span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       {/* Cycle Toggle & Customizers */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 shadow-xs carved-box space-y-6">
         
         {/* Billing Cycle Switcher */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-[var(--color-border-subtle)] pb-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-[var(--color-border-subtle)] pb-6">
           <div>
             <span className="text-xs font-black uppercase text-[var(--color-text-muted)] tracking-wider block mb-1">
               Select Subscription Duration
             </span>
-            <h3 className="text-base font-extrabold text-[var(--color-text-main)]">
-              {billingCycle === 'monthly' ? 'Monthly Plan (Save 25%)' : 'Weekly Flex Plan'}
+            <h3 className="text-base font-extrabold text-[var(--color-text-main)] flex items-center gap-2 flex-wrap">
+              {billingCycle === 'tomorrow' ? (
+                <>
+                  <span className="text-[var(--color-primary)] font-black">Book for Tomorrow ({formattedTomorrow})</span>
+                  <span className="px-2 py-0.5 rounded-md bg-[var(--color-accent)] text-[var(--color-text-on-accent)] text-[10px] font-black uppercase">Single-Day Trial</span>
+                </>
+              ) : billingCycle === 'monthly' ? (
+                'Monthly Plan (Save 25%)'
+              ) : (
+                'Weekly Flex Plan (7 Days)'
+              )}
             </h3>
           </div>
 
-          <div className="flex items-center bg-[var(--color-surface-hover)] p-1.5 rounded-2xl border border-[var(--color-border)]">
+          <div className="flex items-center bg-[var(--color-surface-hover)] p-1.5 rounded-2xl border border-[var(--color-border)] flex-wrap justify-center sm:flex-nowrap gap-1">
+            <button
+              onClick={() => setBillingCycle('tomorrow')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                billingCycle === 'tomorrow'
+                  ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] shadow-md'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+              }`}
+            >
+              <span>Tomorrow</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-black/10 text-[9px] font-black uppercase">
+                1-Day
+              </span>
+            </button>
+
             <button
               onClick={() => setBillingCycle('weekly')}
-              className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
                 billingCycle === 'weekly'
                   ? 'bg-[var(--color-primary)] text-white shadow-xs'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
@@ -259,7 +578,7 @@ export const SubscriptionPlans: React.FC = () => {
             </button>
             <button
               onClick={() => setBillingCycle('monthly')}
-              className={`px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
                 billingCycle === 'monthly'
                   ? 'bg-[var(--color-primary)] text-white shadow-xs'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
@@ -339,24 +658,32 @@ export const SubscriptionPlans: React.FC = () => {
       {/* Subscription Cards Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
         {SUBSCRIPTION_PLANS.map((plan) => {
-          const price = billingCycle === 'monthly' ? plan.monthlyPrice : plan.weeklyPrice;
-          const perMealPrice = Math.round(price / (billingCycle === 'monthly' ? plan.mealsPerDay * 30 : plan.mealsPerDay * 7));
+          const isTomorrow = billingCycle === 'tomorrow';
+          const isMonthly = billingCycle === 'monthly';
+          const price = isTomorrow ? plan.tomorrowPrice : (isMonthly ? plan.monthlyPrice : plan.weeklyPrice);
+          const perMealPrice = Math.round(price / (isTomorrow ? plan.mealsPerDay : (isMonthly ? plan.mealsPerDay * 30 : plan.mealsPerDay * 7)));
 
           return (
             <div
               key={plan.id}
               className={`relative bg-[var(--color-surface)] border rounded-3xl p-6 sm:p-8 shadow-card flex flex-col justify-between transition-all carved-box ${
-                plan.popular
+                isTomorrow
+                  ? 'border-2 border-[var(--color-accent)] shadow-lg ring-2 ring-[var(--color-accent-glow)]'
+                  : plan.popular
                   ? 'border-2 border-[var(--color-primary)] shadow-lg ring-2 ring-[var(--color-accent-glow)]'
                   : 'border-[var(--color-border)] hover:border-[var(--color-primary-muted)]'
               }`}
             >
-              {/* Popular Badge */}
-              {plan.badge && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[var(--color-accent)] text-[var(--color-text-on-accent)] px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-md">
+              {/* Popular / Tomorrow Badge */}
+              {isTomorrow ? (
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[var(--color-accent)] text-[var(--color-text-on-accent)] px-3.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-md whitespace-nowrap z-10">
+                  Single-Day Pre-Order • {formattedTomorrow}
+                </div>
+              ) : plan.badge ? (
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[var(--color-accent)] text-[var(--color-text-on-accent)] px-3.5 py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider shadow-md whitespace-nowrap z-10">
                   {plan.badge}
                 </div>
-              )}
+              ) : null}
 
               <div className="space-y-4">
                 
@@ -382,11 +709,11 @@ export const SubscriptionPlans: React.FC = () => {
                       {formatCurrency(price)}
                     </span>
                     <span className="text-xs font-bold text-[var(--color-text-muted)]">
-                      / {billingCycle === 'monthly' ? 'month' : 'week'}
+                      / {isTomorrow ? 'single-day trial' : (isMonthly ? 'month' : 'week')}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[11px] font-extrabold text-[var(--color-primary)]">
-                    <span>Includes {plan.mealsPerDay} meals daily</span>
+                    <span>Includes {plan.mealsPerDay} meals {isTomorrow ? `for Tomorrow (${formattedTomorrow})` : 'daily'}</span>
                     <span>~{formatCurrency(perMealPrice)}/meal</span>
                   </div>
                 </div>
@@ -413,12 +740,12 @@ export const SubscriptionPlans: React.FC = () => {
                 <button
                   onClick={() => handleSubscribe(plan)}
                   className={`w-full py-4 px-4 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn ${
-                    plan.popular
+                    isTomorrow || plan.popular
                       ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] hover:bg-[var(--color-accent-hover)]'
                       : 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)]'
                   }`}
                 >
-                  <span>Subscribe to {plan.name}</span>
+                  <span>{isTomorrow ? `Pre-Book for Tomorrow (${formatCurrency(plan.tomorrowPrice)})` : `Subscribe to ${plan.name}`}</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -564,6 +891,116 @@ export const SubscriptionPlans: React.FC = () => {
                 <span>Confirm Goal & Subscribe</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Full Live Menu Picker Modal */}
+      {isMenuModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl relative space-y-4 animate-fade-in carved-box">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-4 shrink-0">
+              <div>
+                <h3 className="text-xl font-black text-[var(--color-text-main)] flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-[var(--color-primary)]" />
+                  <span>Choose Tomorrow's Meal from Full Menu</span>
+                </h3>
+                <p className="text-xs text-[var(--color-text-muted)] font-medium mt-0.5">
+                  Select any chef-crafted dish from Bro-Ko-Le's full menu for next-day dispatch.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsMenuModalOpen(false)}
+                className="p-2 rounded-2xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-all cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative shrink-0">
+              <Search className="w-4 h-4 text-[var(--color-text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search menu dishes by name, tag, or ingredient..."
+                value={menuSearchQuery}
+                onChange={(e) => setMenuSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+              />
+            </div>
+
+            {/* Menu Dish Grid */}
+            <div className="overflow-y-auto no-scrollbar flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pr-1">
+              {storeProducts
+                .filter((p) =>
+                  !menuSearchQuery ||
+                  p.title.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
+                  p.tags.some((t) => t.toLowerCase().includes(menuSearchQuery.toLowerCase()))
+                )
+                .map((product) => {
+                  const price = parseFloat(product.priceRange.minVariantPrice.amount);
+                  const isSelected = selectedTomorrowMeal.id === product.id;
+
+                  return (
+                    <div
+                      key={product.id}
+                      onClick={() => {
+                        setSelectedTomorrowMeal({
+                          id: product.id,
+                          name: product.title,
+                          price,
+                          protein: product.nutrition.protein,
+                          calories: product.nutrition.calories,
+                          image: product.featuredImage.url,
+                        });
+                        setIsMenuModalOpen(false);
+                        toast.success(`Selected "${product.title}" for Tomorrow!`, {
+                          description: `${product.nutrition.protein}g Protein • ${formatCurrency(price)}`,
+                        });
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between carved-btn ${
+                        isSelected
+                          ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] ring-2 ring-[var(--color-accent-glow)] shadow-xs'
+                          : 'bg-[var(--color-surface)] border-[var(--color-border)] hover:border-[var(--color-primary-muted)]'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <img
+                          src={product.featuredImage.url}
+                          alt={product.title}
+                          className="w-full h-24 rounded-xl object-cover border border-[var(--color-border)] shadow-xs"
+                        />
+                        <div>
+                          <h4 className="text-xs font-extrabold text-[var(--color-text-main)] line-clamp-2 leading-snug">
+                            {product.title}
+                          </h4>
+                          <span className="text-[10px] text-[var(--color-primary)] font-bold block mt-1">
+                            🔥 {product.nutrition.protein}g Protein · {product.nutrition.calories} kcal
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2.5 border-t border-[var(--color-border)] mt-2">
+                        <span className="text-xs font-black text-[var(--color-text-main)]">{formatCurrency(price)}</span>
+                        {isSelected ? (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-[var(--color-accent)] text-[var(--color-text-on-accent)]">
+                            SELECTED
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-extrabold text-[var(--color-primary)] bg-[var(--color-primary-light)] px-2 py-0.5 rounded-md">
+                            Select Dish
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
 
           </div>

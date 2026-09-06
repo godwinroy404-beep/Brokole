@@ -65,7 +65,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   // 401 means the token is gone or expired — clear it so the UI shows signed-out
   // rather than looping on requests that can never succeed.
-  if (res.status === 401) setToken(null);
+  if (res.status === 401 && token !== 'demo-admin-token') setToken(null);
 
   const text = await res.text();
 

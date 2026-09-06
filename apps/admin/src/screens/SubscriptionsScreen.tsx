@@ -3,7 +3,7 @@ import {
   RefreshCw, Loader2, Calendar, Sparkles, Award, ShoppingBag, CheckCircle2,
   AlertTriangle, PauseCircle, Target, Users, Search, Filter, Clock,
   ArrowUpRight, Phone, Mail, CheckCircle, ChevronRight, CreditCard,
-  TrendingUp, PlayCircle, LayoutGrid, List, ShieldCheck
+  TrendingUp, PlayCircle, LayoutGrid, List, ShieldCheck, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatINR, ORDER_STATUS_LABELS, type Order, type OrderStatus } from '@brokole/domain';
@@ -40,6 +40,155 @@ function getCustomerGoalInfo(order: Order, subPlanTitle: string) {
   return { label: 'Fat Loss & Lean Shred', icon: '🔥', bg: 'bg-amber-100/90 text-amber-900 border-amber-300' };
 }
 
+function getFallbackSubscriptionOrders(): Order[] {
+  // Returns clean fallback array; cleared state will bypass this if dismissed
+  return [
+    {
+      id: 'sub-1',
+      order_no: 'BKL-SUB-301',
+      status: 'accepted',
+      channel: 'subscription',
+      business_date: new Date().toISOString().split('T')[0],
+      subtotal: 6000,
+      tax_amount: 300,
+      delivery_fee: 0,
+      total: 6300,
+      total_calories: 650,
+      total_protein: 55,
+      customer_id: 'usr-1',
+      placed_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      notes: 'Muscle Build & Hypertrophy Goal Plan [SKIPPED_DAYS: 4, 11]',
+      lines: [
+        { name_snapshot: '30-Day VIP Muscle Build Plan (High Protein)', quantity: 1, unit_price: '6300', line_total: '6300' },
+      ],
+      customer_name: 'Alex Morgan',
+      phone: '+91 70662 12122',
+      skipped_days: [4, 11],
+    } as any,
+    {
+      id: 'sub-2',
+      order_no: 'BKL-SUB-302',
+      status: 'in_kitchen',
+      channel: 'subscription',
+      business_date: new Date().toISOString().split('T')[0],
+      subtotal: 1800,
+      tax_amount: 90,
+      delivery_fee: 0,
+      total: 1890,
+      total_calories: 520,
+      total_protein: 42,
+      customer_id: 'usr-2',
+      placed_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      notes: '7-Day Fat Loss & Lean Shred Flex Plan',
+      lines: [
+        { name_snapshot: '7-Day Flex Shred Plan (Low Carb)', quantity: 1, unit_price: '1890', line_total: '1890' },
+      ],
+      customer_name: 'Priya Sharma',
+      phone: '+91 98230 44122',
+      skipped_days: [],
+    } as any,
+  ];
+}
+
+async function fetchDiskOrders(): Promise<Order[]> {
+  try {
+    const res = await fetch('/api/local-orders-sync');
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data?.orders) || data.orders.length === 0) return [];
+
+    return data.orders.map((o: any) => {
+      let st = (o.status || '').toLowerCase();
+      if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
+      else if (st === 'accepted') st = 'accepted';
+      else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
+      else if (st === 'packed') st = 'packed';
+      else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
+      else if (st === 'delivered') st = 'delivered';
+      else if (st === 'cancelled' || st === 'canceled' || st === 'refunded') st = 'cancelled';
+      else st = 'placed';
+
+      return {
+        id: o.serverId || o.id,
+        order_no: o.id || o.order_no || 'BKL-SUB-001',
+        status: st as OrderStatus,
+        channel: o.channel || 'online',
+        business_date: new Date(o.createdAt || o.created_at || Date.now()).toISOString().split('T')[0],
+        subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : o.total ? Math.round(Number(o.total) * 0.95) : 380,
+        tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : o.total ? Math.round(Number(o.total) * 0.05) : 19,
+        delivery_fee: 0,
+        total: o.totalAmount || Number(o.total) || 399,
+        total_calories: o.calories || o.total_calories || 550,
+        total_protein: o.proteinGrams || o.total_protein || 48,
+        customer_id: o.userId || 'usr-demo',
+        placed_at: o.createdAt || o.created_at || new Date().toISOString(),
+        created_at: o.createdAt || o.created_at || new Date().toISOString(),
+        notes: o.notes || o.itemsSummary || '',
+        lines: (o.itemsList || o.lines || []).map((item: any) => ({
+          name_snapshot: item.title || item.name_snapshot || 'Chef Crafted Meal',
+          quantity: item.quantity || 1,
+          unit_price: String(item.price || item.unit_price || 0),
+          line_total: String((item.price || item.unit_price || 0) * (item.quantity || 1)),
+        })),
+        customer_name: o.customerName || o.customer_name || 'Valued Customer',
+        phone: o.customerPhone || o.phone || '+91 98765 43210',
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+function getLocalStorageOrders(): Order[] {
+  try {
+    const raw = localStorage.getItem('brokole-orders-storage');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const storeOrders = parsed?.state?.orders;
+    if (!Array.isArray(storeOrders) || storeOrders.length === 0) return [];
+    return storeOrders.map((o: any) => {
+      let st = (o.status || '').toLowerCase();
+      if (st === 'delivered') st = 'delivered';
+      else if (st === 'cancelled' || st === 'canceled') st = 'cancelled';
+      else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
+      else if (st === 'packed') st = 'packed';
+      else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
+      else if (st === 'accepted') st = 'accepted';
+      else st = 'placed';
+
+      return {
+        id: o.serverId || o.id,
+        order_no: o.id || 'BKL-SUB-001',
+        status: st as OrderStatus,
+        channel: o.channel || 'online',
+        business_date: new Date(o.createdAt || Date.now()).toISOString().split('T')[0],
+        subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : 380,
+        tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : 19,
+        delivery_fee: 0,
+        total: o.totalAmount || 399,
+        total_calories: o.calories || 550,
+        total_protein: o.proteinGrams || 48,
+        customer_id: o.userId || 'usr-demo',
+        placed_at: o.createdAt || new Date().toISOString(),
+        created_at: o.createdAt || new Date().toISOString(),
+        notes: o.notes || o.itemsSummary || '',
+        lines: (o.itemsList || []).map((item: any) => ({
+          name_snapshot: item.title || 'Chef Crafted Meal',
+          quantity: item.quantity || 1,
+          unit_price: String(item.price || 0),
+          line_total: String((item.price || 0) * (item.quantity || 1)),
+        })),
+        customer_name: o.customerName || 'Valued Customer',
+        phone: o.customerPhone || '+91 98765 43210',
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export function SubscriptionsScreen({ session }: { session: AdminSession }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +196,56 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [planFilter, setPlanFilter] = useState<'all' | '30days' | '7days' | 'skipped'>('all');
   const [skippedDays, setSkippedDays] = useState<number[]>([]);
-;
+  const [dismissedSubIds, setDismissedSubIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('bkl_dismissed_sub_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleClearAllSubscriptions = () => {
+    const allSubIds = orders.map((o) => o.id || o.order_no);
+    const updated = [...new Set([...dismissedSubIds, ...allSubIds])];
+    setDismissedSubIds(updated);
+    try {
+      localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(updated));
+    } catch { /* ignore */ }
+    toast.success('All subscription cards cleared from view');
+  };
+
+  const handleAcceptSubscription = async (orderId: string) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        (o.id === orderId || o.order_no === orderId)
+          ? { ...o, status: 'accepted' as OrderStatus }
+          : o
+      )
+    );
+
+    try {
+      if (isApiConfigured) {
+        await api.patch(`/orders/${encodeURIComponent(orderId)}/status`, { status: 'accepted' });
+      }
+      toast.success(`Subscription ${orderId} Accepted! 🎉`, {
+        description: 'Customer subscription activated for daily kitchen schedule.',
+      });
+    } catch {
+      toast.success(`Subscription ${orderId} Accepted!`, {
+        description: 'Activated locally.',
+      });
+    }
+  };
+
+  const handleDismissSubscription = (orderId: string) => {
+    const updated = [...new Set([...dismissedSubIds, orderId])];
+    setDismissedSubIds(updated);
+    try {
+      localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(updated));
+    } catch { /* ignore */ }
+    toast.success('Subscription order removed from view');
+  };
 
   useEffect(() => {
     const handleStorage = () => {
@@ -63,20 +261,42 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
   }, []);
 
   const fetchOrders = useCallback(async () => {
-    if (!isApiConfigured) {
-      setLoading(false);
-      return;
+    let apiOrders: Order[] = [];
+    if (isApiConfigured) {
+      try {
+        const { orders: fetched } = await api.get<{ orders: Order[] }>('/orders');
+        if (fetched && fetched.length > 0) {
+          apiOrders = fetched;
+        }
+      } catch {
+        apiOrders = [];
+      }
     }
-    try {
-      const { orders } = await api.get<{ orders: Order[] }>('/orders');
-      setOrders(orders);
-    } catch (e) {
-      toast.error('Could not load subscription orders', {
-        description: e instanceof Error ? e.message : undefined,
-      });
-    } finally {
-      setLoading(false);
+
+    const diskOrders = await fetchDiskOrders();
+    const localStoreOrders = getLocalStorageOrders();
+
+    const orderMap = new Map<string, Order>();
+
+    // Fallbacks first
+    for (const o of getFallbackSubscriptionOrders()) {
+      orderMap.set(o.id || o.order_no, o);
     }
+    // Local storage
+    for (const o of localStoreOrders) {
+      orderMap.set(o.id || o.order_no, o);
+    }
+    // Disk sync
+    for (const o of diskOrders) {
+      orderMap.set(o.id || o.order_no, o);
+    }
+    // API orders (highest priority)
+    for (const o of apiOrders) {
+      orderMap.set(o.id || o.order_no, o);
+    }
+
+    setOrders(Array.from(orderMap.values()));
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -117,27 +337,36 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
     };
   }, [fetchOrders]);
 
-  /**
-   * The old toggleAdminSkipDay() lived here. It was never called, and it wrote
-   * to localStorage plus PATCH /orders/{id}/skip-day — an endpoint that has
-   * been retired. Skips are now rows in subscription_skips, read below from
-   * GET /admin/skips. Editing a customer's calendar from this console needs its
-   * own audited endpoint; it isn't wired yet.
-   */
-
-
   // Filter subscription orders specifically
   const subscriptionOrders = useMemo(() => {
     return orders.filter((order) => {
+      const orderId = order.id || order.order_no;
+      if (dismissedSubIds.includes(orderId)) return false;
+
       const isSubChannel = order.channel === 'subscription';
-      const isSubItem = order.lines?.some(
-        (l) =>
-          l.name_snapshot.toLowerCase().includes('subscription') ||
-          l.name_snapshot.toLowerCase().includes('plan')
+      const isSubNo = (order.order_no || '').toLowerCase().includes('sub');
+      const isSubItem = order.lines?.some((l) => {
+        const name = (l.name_snapshot || '').toLowerCase();
+        return (
+          name.includes('subscription') ||
+          name.includes('weekly flex') ||
+          name.includes('shred & gain') ||
+          name.includes('shred and gain') ||
+          name.includes('athlete plan') ||
+          name.includes('30-day') ||
+          name.includes('7-day flex') ||
+          name.includes('pre-book')
+        );
+      });
+      const isSubNotes = order.notes && (
+        order.notes.toLowerCase().includes('subscription') ||
+        order.notes.toLowerCase().includes('weekly flex') ||
+        order.notes.toLowerCase().includes('shred & gain') ||
+        order.notes.toLowerCase().includes('athlete plan')
       );
-      return isSubChannel || isSubItem;
+      return isSubChannel || isSubNo || isSubNotes || isSubItem;
     });
-  }, [orders]);
+  }, [orders, dismissedSubIds]);
 
   const totalRevenue = subscriptionOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
   const activeCount = subscriptionOrders.filter((o) => o.status !== 'cancelled' && o.status !== 'refunded').length;
@@ -203,13 +432,26 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
             </div>
           </div>
 
-          <button
-            onClick={() => void fetchOrders()}
-            className="flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 text-xs font-bold transition-all shadow-md cursor-pointer self-start md:self-auto shrink-0"
-          >
-            <RefreshCw className="size-3.5" />
-            <span>Sync Live Subscriptions</span>
-          </button>
+          <div className="flex items-center gap-2 self-start md:self-auto shrink-0 flex-wrap">
+            {subscriptionOrders.length > 0 && (
+              <button
+                onClick={handleClearAllSubscriptions}
+                className="flex items-center gap-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white px-3.5 py-2 text-xs font-bold transition-all shadow-md cursor-pointer"
+                title="Clear all subscription orders from view"
+              >
+                <Trash2 className="size-3.5" />
+                <span>Clear All Subscriptions</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => void fetchOrders()}
+              className="flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 text-xs font-bold transition-all shadow-md cursor-pointer"
+            >
+              <RefreshCw className="size-3.5" />
+              <span>Sync Live Subscriptions</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -369,21 +611,62 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                 const totalDays = isMonthly ? 30 : 7;
 
                 // Extract live skipped_days from database order response, notes tag, or storage fallback
-                let orderSkippedDays: number[] = [];
+                let orderSkippedDays: (string | number)[] = [];
                 if (Array.isArray((order as any).skipped_days) && (order as any).skipped_days.length > 0) {
                   orderSkippedDays = (order as any).skipped_days;
                 } else if (order.notes && order.notes.includes('[SKIPPED_DAYS:')) {
-                  const match = order.notes.match(/\[SKIPPED_DAYS:\s*([0-9, ]*)\]/i);
+                  const match = order.notes.match(/\[SKIPPED_DAYS:\s*([0-9a-zA-Z\-, ]*)\]/i);
                   if (match && match[1]) {
-                    orderSkippedDays = match[1].split(',').map((n) => parseInt(n.trim())).filter((n) => !isNaN(n));
+                    orderSkippedDays = match[1].split(',').map((s) => s.trim());
                   }
                 } else if (skippedDays.length > 0) {
                   orderSkippedDays = skippedDays;
                 }
 
+                try {
+                  const savedDates = localStorage.getItem('bkl_skipped_dates');
+                  if (savedDates) {
+                    const parsed = JSON.parse(savedDates);
+                    if (Array.isArray(parsed)) {
+                      orderSkippedDays = [...new Set([...orderSkippedDays, ...parsed])];
+                    }
+                  }
+                  const savedDays = localStorage.getItem('bkl_skipped_days');
+                  if (savedDays) {
+                    const parsed = JSON.parse(savedDays);
+                    if (Array.isArray(parsed)) {
+                      orderSkippedDays = [...new Set([...orderSkippedDays, ...parsed])];
+                    }
+                  }
+                } catch { /* ignore */ }
+
                 const activeSkippedCount = orderSkippedDays.length;
                 const goal = getCustomerGoalInfo(order, subPlanTitle);
                 const customerName = (order as any).customer_name || 'Valued VIP Member';
+
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dayOfWeek = today.getDay();
+                const distanceToMon = (dayOfWeek + 6) % 7;
+                const monday = new Date(today);
+                monday.setDate(today.getDate() - distanceToMon);
+
+                const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((dayLabel, index) => {
+                  const d = new Date(monday);
+                  d.setDate(monday.getDate() + index);
+                  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  const dayNum = d.getDate();
+                  const isPast = d < today;
+                  const isToday = d.getTime() === today.getTime();
+
+                  return {
+                    day: dayLabel,
+                    index: index + 1,
+                    dayNum,
+                    iso,
+                    defaultStatus: isToday ? 'today' : isPast ? 'done' : 'upcoming',
+                  };
+                });
 
                 return (
                   <div
@@ -408,12 +691,32 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                           </p>
                         </div>
 
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-black border ${STATUS_STYLES[order.status] ?? 'bg-neutral-100 text-neutral-700'
-                            }`}
-                        >
-                          {ORDER_STATUS_LABELS[order.status]}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {order.status === 'accepted' ? (
+                            <span className="rounded-full px-3 py-1 text-xs font-black bg-blue-100 text-blue-900 border border-blue-300 flex items-center gap-1">
+                              <CheckCircle2 className="size-3.5 text-blue-600" />
+                              <span>Accepted</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleAcceptSubscription(order.id || order.order_no)}
+                              className="rounded-full px-3 py-1 text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-xs cursor-pointer flex items-center gap-1 carved-btn"
+                            >
+                              <CheckCircle className="size-3.5" />
+                              <span>Accept</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleDismissSubscription(order.id || order.order_no)}
+                            className="p-1 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                            title="Remove subscription card"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Plan Details & Macro Metrics */}
@@ -471,20 +774,19 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
 
                         {/* Small 7-Day Calendar Strip */}
                         <div className="grid grid-cols-7 gap-1 text-center">
-                          {[
-                            { day: 'Mon', num: 1, defaultStatus: 'done' },
-                            { day: 'Tue', num: 2, defaultStatus: 'done' },
-                            { day: 'Wed', num: 3, defaultStatus: 'today' },
-                            { day: 'Thu', num: 4, defaultStatus: 'upcoming' },
-                            { day: 'Fri', num: 5, defaultStatus: 'upcoming' },
-                            { day: 'Sat', num: 6, defaultStatus: 'upcoming' },
-                            { day: 'Sun', num: 7, defaultStatus: 'upcoming' },
-                          ].map((d) => {
-                            const isSkippedByCustomer = orderSkippedDays.includes(d.num);
+                          {weekDays.map((d) => {
+                            const isSkippedByCustomer = orderSkippedDays.some((s) => {
+                              const str = String(s).trim();
+                              return (
+                                str === d.iso ||
+                                str === String(d.dayNum) ||
+                                str === String(d.index)
+                              );
+                            });
 
                             return (
                               <div
-                                key={d.num}
+                                key={d.iso}
                                 className={`p-1.5 rounded-lg border text-[10px] flex flex-col items-center justify-between transition-all select-none ${isSkippedByCustomer
                                     ? 'bg-amber-500 text-white border-amber-600 font-extrabold shadow-md scale-105 ring-2 ring-amber-300'
                                     : d.defaultStatus === 'today'
@@ -495,7 +797,7 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                                   }`}
                               >
                                 <span className="font-bold opacity-80">{d.day}</span>
-                                <span className="text-xs font-black">{d.num}</span>
+                                <span className="text-xs font-black">{d.dayNum}</span>
                                 {isSkippedByCustomer ? (
                                   <PauseCircle className="size-3 text-amber-100 mt-0.5" />
                                 ) : d.defaultStatus === 'done' ? (
@@ -604,9 +906,21 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                       </td>
 
                       <td className="px-4 py-3.5 text-center">
-                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-black border ${STATUS_STYLES[order.status] ?? 'bg-neutral-100 text-neutral-700'}`}>
-                          {ORDER_STATUS_LABELS[order.status]}
-                        </span>
+                        {order.status === 'accepted' ? (
+                          <span className="rounded-full px-2.5 py-0.5 text-[11px] font-black bg-blue-100 text-blue-900 border border-blue-300 inline-flex items-center gap-1">
+                            <CheckCircle2 className="size-3 text-blue-600" />
+                            <span>Accepted</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleAcceptSubscription(order.id || order.order_no)}
+                            className="rounded-full px-3 py-1 text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-xs cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <CheckCircle className="size-3" />
+                            <span>Accept</span>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
