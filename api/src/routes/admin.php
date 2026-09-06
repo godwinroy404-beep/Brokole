@@ -42,18 +42,55 @@ function route_list_customers(PDO $db, Guard $guard): never
     $guard->requirePermission('customers.read');
     $rows = $db->query(
         "SELECT u.id, u.email, u.full_name, u.phone, u.created_at,
-                (SELECT line1 FROM addresses WHERE user_id = u.id AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1) AS address,
                 COUNT(o.id) AS orders_count, COALESCE(SUM(o.total), 0) AS total_spent,
-                MAX(o.created_at) AS last_order_at,
-                (SELECT COUNT(*) FROM orders sub_o 
-                   JOIN order_lines sub_l ON sub_l.order_id = sub_o.id 
-                  WHERE sub_o.customer_id = u.id AND sub_o.deleted_at IS NULL
-                    AND (sub_l.name_snapshot LIKE '%Subscription%' OR sub_l.name_snapshot LIKE '%Plan%')) AS subscription_count
+                MAX(o.created_at) AS last_order_at
            FROM users u
       LEFT JOIN orders o ON o.customer_id = u.id AND o.deleted_at IS NULL
           WHERE u.role = 'customer' AND u.deleted_at IS NULL
        GROUP BY u.id ORDER BY u.created_at DESC LIMIT 200"
     )->fetchAll();
+
+    if ($rows) {
+        $uids = array_column($rows, 'id');
+        $in = implode(',', array_fill(0, count($uids), '?'));
+
+        // Batch fetch primary addresses
+        $stAddr = $db->prepare(
+            "SELECT user_id, line1
+               FROM addresses
+              WHERE user_id IN ($in) AND deleted_at IS NULL
+           ORDER BY created_at DESC"
+        );
+        $stAddr->execute($uids);
+        $addresses = [];
+        foreach ($stAddr->fetchAll() as $a) {
+            if (!isset($addresses[$a['user_id']])) {
+                $addresses[$a['user_id']] = $a['line1'];
+            }
+        }
+
+        // Batch fetch subscription counts
+        $stSub = $db->prepare(
+            "SELECT sub_o.customer_id, COUNT(DISTINCT sub_o.id) AS cnt
+               FROM orders sub_o
+               JOIN order_lines sub_l ON sub_l.order_id = sub_o.id
+              WHERE sub_o.customer_id IN ($in) AND sub_o.deleted_at IS NULL
+                AND (sub_l.name_snapshot LIKE '%Subscription%' OR sub_l.name_snapshot LIKE '%Plan%')
+           GROUP BY sub_o.customer_id"
+        );
+        $stSub->execute($uids);
+        $subCounts = [];
+        foreach ($stSub->fetchAll() as $s) {
+            $subCounts[$s['customer_id']] = (int) $s['cnt'];
+        }
+
+        foreach ($rows as &$r) {
+            $r['address'] = $addresses[$r['id']] ?? null;
+            $r['subscription_count'] = $subCounts[$r['id']] ?? 0;
+        }
+        unset($r);
+    }
+
     Json::ok(['customers' => $rows]);
 }
 

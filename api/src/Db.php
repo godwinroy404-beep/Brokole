@@ -17,6 +17,7 @@ final class Db
             self::$pdo = new PDO($dsn, $config['db_user'], $config['db_pass'], [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
                 // Real prepared statements, not client-side interpolation.
                 // With this off, PDO would build the SQL string itself and the
                 // protection against injection depends on its escaping instead

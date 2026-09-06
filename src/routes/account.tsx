@@ -8,6 +8,7 @@ import { ensureAddress } from '../lib/menu';
 import { formatCurrency } from '../lib/nutritionParser';
 import { toast } from 'sonner';
 import { api, isApiConfigured } from '../lib/api';
+import { pushLocalOrderSync } from '../lib/localSync';
 
 /** Local YYYY-MM-DD. toISOString() would shift the date across the IST offset. */
 function toIsoDate(d: Date): string {
@@ -228,6 +229,29 @@ function AccountPage() {
       localStorage.setItem('bkl_skipped_dates', JSON.stringify(datesArr));
       localStorage.setItem('bkl_skipped_days', JSON.stringify([...datesArr, ...dayNums]));
       window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('bkl-skips-updated', { detail: datesArr }));
+
+      const currentCustomerName = (user as any)?.name || (user as any)?.full_name || 'r roy';
+      const currentCustomerPhone = (user as any)?.phone || '+91 98765 00000';
+      const currentPlanTitle = subOrder?.itemsSummary || 'Bro-Ko-Le Shred & Gain Pro (7-Day Weekly)';
+      const currentOrderId = subOrder?.id || 'BKL-SUB-701';
+
+      void pushLocalOrderSync({
+        id: currentOrderId,
+        order_no: currentOrderId,
+        customer_name: currentCustomerName,
+        phone: currentCustomerPhone,
+        channel: 'subscription',
+        itemsSummary: currentPlanTitle,
+        totalAmount: subOrder?.totalAmount || 1899,
+        proteinGrams: subOrder?.proteinGrams || 55,
+        calories: subOrder?.calories || 680,
+        skipped_days: datesArr,
+        notes: `${currentPlanTitle} [SKIPPED_DAYS: ${datesArr.join(',')}]`,
+        lines: [
+          { name_snapshot: currentPlanTitle, quantity: 1, unit_price: '1899', line_total: '1899' },
+        ],
+      });
     } catch { /* ignore */ }
 
     if (!isApiConfigured) {
@@ -350,44 +374,6 @@ function AccountPage() {
     navigate({ to: '/' });
   };
 
-  if (!isLoggedIn || !user) {
-    return (
-      <div className="px-4 sm:px-6 lg:px-8 py-12 max-w-lg mx-auto text-center space-y-6">
-        <div className="bg-[var(--color-surface)] rounded-3xl p-8 shadow-card carved-box space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-[var(--color-primary-light)] text-[var(--color-primary)] flex items-center justify-center mx-auto shadow-xs">
-            <User className="w-8 h-8" />
-          </div>
-
-          <div>
-            <h1 className="text-2xl font-black text-[var(--color-text-main)] tracking-tight">
-              Sign In to Bro-Ko-Le
-            </h1>
-            <p className="text-xs text-[var(--color-text-muted)] font-medium mt-1 leading-relaxed">
-              Access your saved delivery address, meal plan calendar, skip day controls, and order history.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <button
-              onClick={() => openAuthModal('login')}
-              className="w-full py-3.5 px-4 rounded-2xl bg-[var(--color-primary)] text-[var(--color-text-on-primary)] font-black text-sm hover:bg-[var(--color-primary-hover)] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
-            >
-              <span>Sign In to Account</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => openAuthModal('register')}
-              className="w-full py-3.5 px-4 rounded-2xl bg-[var(--color-surface-hover)] text-[var(--color-text-main)] font-extrabold text-sm hover:bg-[var(--color-surface)] transition-all cursor-pointer carved-btn"
-            >
-              Create New Account
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const subOrder = orders.find(
     (o) =>
       (o.itemsSummary && (
@@ -433,16 +419,6 @@ function AccountPage() {
       o.totalAmount >= 3000
   );
 
-  /**
-   * The next 7 days, generated from today.
-   *
-   * This was a hardcoded "Sep 1 … Sep 7" array with "Sep 3 (Today)" baked in,
-   * so it drifted out of date the moment the month moved on.
-   *
-   * The meal names are still placeholders: real per-day meals need the
-   * subscription schedule model (plans -> subscription_schedule), which does
-   * not exist yet.
-   */
   const ROTATION = [
     'Quinoa Paneer Bowl + Berry Smoothie',
     'Grilled Chicken & Brown Rice',
@@ -568,6 +544,58 @@ function AccountPage() {
     });
   }, []);
 
+  const activeSkippedCount = useMemo(() => {
+    if (isMonthlyPlan) {
+      return calendarMonthGrid.filter((item) => !item.isBlank && skippedDates.has(item.iso!)).length;
+    }
+    return planDays.filter((day) => skippedDates.has(day.iso)).length;
+  }, [isMonthlyPlan, calendarMonthGrid, planDays, skippedDates]);
+
+  const activeCompletedCount = useMemo(() => {
+    if (isMonthlyPlan) {
+      return calendarMonthGrid.filter((item) => !item.isBlank && item.isPast && !skippedDates.has(item.iso!)).length;
+    }
+    return planDays.filter((day) => day.isPast && !skippedDates.has(day.iso)).length;
+  }, [isMonthlyPlan, calendarMonthGrid, planDays, skippedDates]);
+
+  if (!isLoggedIn || !user) {
+    return (
+      <div className="px-4 sm:px-6 lg:px-8 py-12 max-w-lg mx-auto text-center space-y-6">
+        <div className="bg-[var(--color-surface)] rounded-3xl p-8 shadow-card carved-box space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-[var(--color-primary-light)] text-[var(--color-primary)] flex items-center justify-center mx-auto shadow-xs">
+            <User className="w-8 h-8" />
+          </div>
+
+          <div>
+            <h1 className="text-2xl font-black text-[var(--color-text-main)] tracking-tight">
+              Sign In to Bro-Ko-Le
+            </h1>
+            <p className="text-xs text-[var(--color-text-muted)] font-medium mt-1 leading-relaxed">
+              Access your saved delivery address, meal plan calendar, skip day controls, and order history.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={() => openAuthModal('login')}
+              className="w-full py-3.5 px-4 rounded-2xl bg-[var(--color-primary)] text-[var(--color-text-on-primary)] font-black text-sm hover:bg-[var(--color-primary-hover)] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
+            >
+              <span>Sign In to Account</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => openAuthModal('register')}
+              className="w-full py-3.5 px-4 rounded-2xl bg-[var(--color-surface-hover)] text-[var(--color-text-main)] font-extrabold text-sm hover:bg-[var(--color-surface)] transition-all cursor-pointer carved-btn"
+            >
+              Create New Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 px-4 sm:px-6 lg:px-8 py-4 max-w-4xl mx-auto">
       {/* Profile Header Banner */}
@@ -638,9 +666,9 @@ function AccountPage() {
           >
             <Calendar className="w-4 h-4 text-emerald-300" />
             <span>Meal Plan Calendar</span>
-            {skippedDates.size > 0 && (
+            {activeSkippedCount > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-emerald-950 text-[9px] font-black">
-                {skippedDates.size} Skipped
+                {activeSkippedCount} Skipped
               </span>
             )}
           </button>
@@ -802,22 +830,28 @@ function AccountPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
                 <div className="bg-emerald-950/60 p-3 rounded-2xl">
                   <span className="text-[10px] text-emerald-300 font-bold block">Active Days</span>
-                  <span className="text-lg font-black text-white">7 Days</span>
+                  <span className="text-lg font-black text-white">{isMonthlyPlan ? '30 Days' : '7 Days'}</span>
                 </div>
 
                 <div className="bg-emerald-950/60 p-3 rounded-2xl">
                   <span className="text-[10px] text-emerald-300 font-bold block">Completed</span>
-                  <span className="text-lg font-black text-emerald-400">2 Days</span>
+                  <span className="text-lg font-black text-emerald-400">
+                    {activeCompletedCount} {activeCompletedCount === 1 ? 'Day' : 'Days'}
+                  </span>
                 </div>
 
                 <div className="bg-emerald-950/60 p-3 rounded-2xl">
                   <span className="text-[10px] text-emerald-300 font-bold block">Skipped Days</span>
-                  <span className="text-lg font-black text-amber-400">{skippedDates.size} Days</span>
+                  <span className="text-lg font-black text-amber-400">
+                    {activeSkippedCount} {activeSkippedCount === 1 ? 'Day' : 'Days'}
+                  </span>
                 </div>
 
                 <div className="bg-emerald-950/60 p-3 rounded-2xl">
                   <span className="text-[10px] text-emerald-300 font-bold block">Extension Bonus</span>
-                  <span className="text-lg font-black text-emerald-200">+{skippedDates.size} Days</span>
+                  <span className="text-lg font-black text-emerald-200">
+                    +{activeSkippedCount} {activeSkippedCount === 1 ? 'Day' : 'Days'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -964,53 +998,14 @@ function AccountPage() {
               ) : (
                 /* FOR 30-DAY / MONTHLY SUBSCRIPTION PLAN CUSTOMERS: SHOW FULL MONTHLY CALENDAR GRID */
                 <div className="space-y-5">
-                  {/* Month Navigation & Explanatory Subtitle */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-emerald-100">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-xl font-black text-emerald-950 tracking-tight">
-                        {calendarMonthHeader}
-                      </h3>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={handlePrevMonth}
-                          className="p-1.5 rounded-xl hover:bg-emerald-100/80 text-emerald-800 transition-all cursor-pointer"
-                          title="Previous Month"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleTodayMonth}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-[11px] font-black transition-all cursor-pointer shadow-xs carved-btn"
-                        >
-                          Today
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleNextMonth}
-                          className="p-1.5 rounded-xl hover:bg-emerald-100/80 text-emerald-800 transition-all cursor-pointer"
-                          title="Next Month"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
                     <div className="text-[11px] text-emerald-800 font-extrabold flex items-center gap-2">
                       <span className="inline-block size-2 rounded-full bg-emerald-600" />
                       <span>Dots mark delivery dates. Click day tile to toggle skip.</span>
                     </div>
                   </div>
 
-                  {/* Day of Week Columns */}
-                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2.5 text-center">
-                    {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day) => (
-                      <div key={day} className="text-[10px] sm:text-[11px] font-black text-emerald-800/70 uppercase tracking-wider py-1">
-                        {day}
-                      </div>
-                    ))}
-                  </div>
+
 
                   {/* Monthly Day Tile Grid */}
                   <div className="grid grid-cols-7 gap-1.5 sm:gap-2.5">

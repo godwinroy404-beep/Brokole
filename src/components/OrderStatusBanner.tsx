@@ -300,7 +300,7 @@ export const OrderStatusBanner: React.FC = () => {
       <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 animate-bounce-subtle">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-3 bg-neutral-900/95 text-white pl-3.5 pr-4 py-2.5 rounded-full shadow-2xl border border-neutral-700/80 backdrop-blur-md hover:bg-neutral-800 transition-all transform hover:scale-[1.03] active:scale-[0.98] cursor-pointer group"
+          className="flex items-center gap-3 bg-white/95 text-neutral-900 pl-3.5 pr-4 py-2.5 rounded-full shadow-xl border border-neutral-200/90 backdrop-blur-md hover:bg-neutral-50 hover:border-neutral-300 transition-all transform hover:scale-[1.03] active:scale-[0.98] cursor-pointer group"
         >
           {/* Pulsing Status Dot */}
           <span className="relative flex size-3 shrink-0">
@@ -308,48 +308,44 @@ export const OrderStatusBanner: React.FC = () => {
             <span className={`relative inline-flex size-3 rounded-full ${statusInfo.dotColor}`}></span>
           </span>
 
-          {/* Animated Scooter / Icon */}
-          <div className="flex items-center gap-1 bg-neutral-800 px-2 py-0.5 rounded-full border border-neutral-700 text-xs shrink-0">
-            <span className="text-sm select-none">🛵</span>
-            {statusInfo.scooterMode === 'riding' ? (
-              <span className="text-[10px] text-amber-300 font-black animate-pulse">💨</span>
-            ) : statusInfo.scooterMode === 'kitchen' ? (
-              <span className="text-xs select-none">🍳</span>
-            ) : statusInfo.scooterMode === 'delivered' ? (
-              <span className="text-xs select-none">🎉</span>
-            ) : statusInfo.scooterMode === 'cancelled' ? (
-              <span className="text-[10px] text-rose-400 font-black">✕</span>
-            ) : (
-              <span className="text-[10px] text-emerald-300 font-bold">✓</span>
-            )}
+          {/* Animated Scooter Delivery Image */}
+          <div className="flex items-center justify-center size-8 bg-transparent overflow-visible shrink-0 relative">
+            <img
+              src="/images/scooter.gif"
+              alt="Delivery Scooter"
+              className="w-9 h-9 max-w-none object-contain pointer-events-none"
+              onError={(e) => {
+                // Fallback if image fails to load
+                (e.currentTarget as HTMLImageElement).src = '/scooter.gif';
+              }}
+            />
           </div>
 
           {/* Order ID & Status Label */}
           <div className="text-left leading-tight">
             <div className="flex items-center gap-1.5">
-              <span className="font-mono text-[11px] font-bold text-neutral-300">{activeOrder.id}</span>
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                statusInfo.scooterMode === 'cancelled' ? 'text-rose-400' : 'text-emerald-400'
-              }`}>
+              <span className="font-mono text-[11px] font-bold text-neutral-500">{activeOrder.id}</span>
+              <span className={`text-[10px] font-extrabold uppercase tracking-wider ${statusInfo.scooterMode === 'cancelled' ? 'text-rose-600' : 'text-emerald-600'
+                }`}>
                 {statusInfo.scooterMode === 'cancelled' ? 'Cancelled' : statusInfo.scooterMode === 'delivered' ? 'Done' : 'Live'}
               </span>
             </div>
-            <div className="text-xs font-bold text-white group-hover:text-brand-300 transition">
+            <div className="text-xs font-black text-neutral-900 group-hover:text-emerald-600 transition">
               {statusInfo.label}
             </div>
           </div>
 
-          <ChevronUp className={`size-4 text-neutral-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+          <ChevronUp className={`size-4 text-neutral-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
         </button>
       </div>
 
       {/* Expanded Order Tracking Modal / Sheet */}
       {isExpanded && (
-        <div 
+        <div
           onClick={() => { setIsExpanded(false); setShowDropdown(false); }}
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in cursor-pointer"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-md bg-white border border-neutral-200 rounded-3xl p-5 shadow-2xl space-y-4 animate-slide-up cursor-default"
           >
@@ -413,10 +409,10 @@ export const OrderStatusBanner: React.FC = () => {
             </div>
 
             {/* Step Progress Line */}
-            <div className="py-3 px-1">
+            <div className="py-2.5 px-1">
               <div className="flex items-center justify-between relative px-2">
                 {/* Background Connecting Line */}
-                <div className="absolute left-6 right-6 top-4 h-1 bg-neutral-200 -z-0 rounded-full overflow-hidden">
+                <div className="absolute left-6 right-6 top-4.5 h-0.5 bg-neutral-200 -z-0 rounded-full overflow-hidden">
                   <div
                     className={`h-full ${statusInfo.lineColor} transition-all duration-500`}
                     style={{
@@ -424,8 +420,8 @@ export const OrderStatusBanner: React.FC = () => {
                         statusInfo.step === 0
                           ? '0%'
                           : statusInfo.step === 4
-                          ? '100%'
-                          : `${((statusInfo.step - 1) / 3) * 100}%`,
+                            ? '100%'
+                            : `${((statusInfo.step - 1) / 3) * 100}%`,
                     }}
                   />
                 </div>
@@ -439,33 +435,72 @@ export const OrderStatusBanner: React.FC = () => {
                   const isCompleted = statusInfo.step > st.s || statusInfo.step === 4;
                   const isCurrent = statusInfo.step === st.s && statusInfo.step !== 4;
                   const isCancelledState = statusInfo.step === 0;
-                  const Icon = st.icon;
+                  const hasGif = true;
 
                   return (
                     <div key={st.s} className="flex flex-col items-center gap-1.5 z-10">
                       <div
-                        className={`size-9 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                          isCancelledState
-                            ? 'bg-neutral-100 text-neutral-400 border border-neutral-200'
-                            : isCurrent
-                            ? statusInfo.activeCircleBg
-                            : isCompleted
-                            ? 'bg-emerald-600 text-white shadow-xs'
-                            : 'bg-neutral-100 text-neutral-400 border border-neutral-200'
+                        className={`flex items-center justify-center text-xs font-black transition-all ${
+                          hasGif
+                            ? 'size-9 bg-transparent overflow-visible relative'
+                            : `size-9 rounded-full overflow-hidden ${
+                                isCancelledState
+                                  ? 'bg-neutral-100 text-neutral-400 border border-neutral-200'
+                                  : isCurrent
+                                  ? statusInfo.activeCircleBg
+                                  : isCompleted
+                                  ? 'bg-emerald-600 text-white shadow-xs'
+                                  : 'bg-neutral-100 text-neutral-400 border border-neutral-200'
+                              }`
                         }`}
                       >
-                        <Icon className="size-4" />
+                        {st.s === 1 ? (
+                          <img
+                            src="/images/past.gif"
+                            alt="Past Status"
+                            className="w-9.5 h-9.5 max-w-none object-contain pointer-events-none"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = '/past.gif';
+                            }}
+                          />
+                        ) : st.s === 2 ? (
+                          <img
+                            src="/images/cooking.gif"
+                            alt="Kitchen Cooking"
+                            className="w-9.5 h-9.5 max-w-none object-contain pointer-events-none"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = '/cooking.gif';
+                            }}
+                          />
+                        ) : st.s === 3 ? (
+                          <img
+                            src="/images/delivery-scooter.gif"
+                            alt="Rider Scooter"
+                            className="w-9.5 h-9.5 max-w-none object-contain pointer-events-none"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = '/scooter.gif';
+                            }}
+                          />
+                        ) : (
+                          <img
+                            src="/images/verified.gif"
+                            alt="Delivered Verified"
+                            className="w-9.5 h-9.5 max-w-none object-contain pointer-events-none"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = '/verified.gif';
+                            }}
+                          />
+                        )}
                       </div>
                       <span
-                        className={`text-[11px] transition-colors ${
-                          isCancelledState
+                        className={`text-[11px] transition-colors ${isCancelledState
                             ? 'font-medium text-neutral-400'
                             : isCurrent
-                            ? 'font-black text-neutral-900 scale-105'
-                            : isCompleted
-                            ? 'font-bold text-neutral-800'
-                            : 'font-semibold text-neutral-400'
-                        }`}
+                              ? 'font-black text-neutral-900 scale-105'
+                              : isCompleted
+                                ? 'font-bold text-neutral-800'
+                                : 'font-semibold text-neutral-400'
+                          }`}
                       >
                         {st.label}
                       </span>

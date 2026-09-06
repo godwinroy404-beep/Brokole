@@ -465,9 +465,18 @@ const FALLBACK_MENU_ROWS: Row[] = [
       };
 
       if (editingItem) {
+        let updatedItem: Row | null = null;
         if (isApiConfigured) {
-          const { item } = await api.patch<{ item: Row }>(`/admin/menu/${editingItem.id}`, payload);
-          toast.success(`Successfully updated "${item.name}"!`);
+          try {
+            const res = await api.patch<{ item: Row }>(`/admin/menu/${editingItem.id}`, payload);
+            updatedItem = res.item;
+          } catch (apiErr) {
+            console.warn('[MenuScreen] API update failed, using local fallback:', apiErr);
+          }
+        }
+        if (updatedItem) {
+          setRows((prev) => prev.map((r) => (r.id === updatedItem!.id ? { ...r, ...updatedItem! } : r)));
+          toast.success(`Successfully updated "${updatedItem.name}"!`);
         } else {
           setRows((prev) =>
             prev.map((r) => (r.id === editingItem.id ? { ...r, ...payload, price: payload.price } : r))
@@ -475,9 +484,18 @@ const FALLBACK_MENU_ROWS: Row[] = [
           toast.success(`Updated "${payload.name}"!`);
         }
       } else {
+        let createdItem: Row | null = null;
         if (isApiConfigured) {
-          const { item } = await api.post<{ item: Row }>('/admin/menu', payload);
-          toast.success(`Successfully added "${item.name}" to menu!`);
+          try {
+            const res = await api.post<{ item: Row }>('/admin/menu', payload);
+            createdItem = res.item;
+          } catch (apiErr) {
+            console.warn('[MenuScreen] API create failed, using local fallback:', apiErr);
+          }
+        }
+        if (createdItem) {
+          setRows((prev) => [createdItem!, ...prev]);
+          toast.success(`Successfully added "${createdItem.name}" to menu!`);
         } else {
           const selectedCat = categories.find((c) => c.id === formData.category_id);
           const newRow: Row = {

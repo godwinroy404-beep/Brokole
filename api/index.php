@@ -22,7 +22,11 @@ ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
 // Anything that manages to print is discarded before we emit the real response.
-ob_start();
+if (!headers_sent() && isset($_SERVER['HTTP_ACCEPT_ENCODING']) && str_contains($_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip')) {
+    ob_start('ob_gzhandler');
+} else {
+    ob_start();
+}
 
 require __DIR__ . '/src/Json.php';
 require __DIR__ . '/src/Db.php';

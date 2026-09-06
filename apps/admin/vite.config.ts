@@ -39,7 +39,11 @@ function localOrdersSyncPlugin() {
                 current = data.orders || []
               } else if (data.order) {
                 const idx = current.findIndex(
-                  (o: any) => o.id === data.order.id || (data.order.serverId && o.serverId === data.order.serverId)
+                  (o: any) =>
+                    o.id === data.order.id ||
+                    (data.order.serverId && o.serverId === data.order.serverId) ||
+                    (data.order.order_no && o.order_no === data.order.order_no) ||
+                    (o.customer_name && data.order.customer_name && o.customer_name.toLowerCase() === data.order.customer_name.toLowerCase())
                 )
                 if (idx >= 0) {
                   current[idx] = { ...current[idx], ...data.order }

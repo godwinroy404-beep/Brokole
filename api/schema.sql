@@ -242,6 +242,7 @@ CREATE TABLE IF NOT EXISTS orders (
   KEY ord_customer_idx (customer_id, created_at),
   KEY ord_status_idx (status),
   KEY ord_updated_idx (updated_at),          -- polling for the live board
+  KEY ord_biz_date_idx (business_date, status),
   CONSTRAINT ord_outlet_fk   FOREIGN KEY (outlet_id)   REFERENCES outlets(id),
   CONSTRAINT ord_customer_fk FOREIGN KEY (customer_id) REFERENCES users(id),
   CONSTRAINT ord_address_fk  FOREIGN KEY (address_id)  REFERENCES addresses(id)
@@ -264,6 +265,7 @@ CREATE TABLE IF NOT EXISTS order_lines (
   notes             TEXT,
   created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY ol_order_idx (order_id),
+  KEY ol_order_name_idx (order_id, name_snapshot(64)),
   CONSTRAINT ol_qty_chk CHECK (quantity > 0),
   CONSTRAINT ol_order_fk FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   CONSTRAINT ol_item_fk  FOREIGN KEY (menu_item_id) REFERENCES menu_items(id)
