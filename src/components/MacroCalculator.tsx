@@ -173,7 +173,7 @@ export const MacroCalculator: React.FC = () => {
 
           {/* Quick Tip */}
           <div className="mt-6 pt-4 border-t border-white/10 text-xs text-emerald-100 flex items-center gap-2 font-medium">
-            <span>Ordering 2 meals from Bro-Ko-Le covers ~70% of your daily protein target!</span>
+            <span>Ordering 2 meals from Brokole covers ~70% of your daily protein target!</span>
           </div>
 
           {/* Set Goal Button */}

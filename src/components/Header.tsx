@@ -44,12 +44,12 @@ export const Header: React.FC<HeaderProps> = ({ onSearch }) => {
             <Link to="/" className="flex items-center gap-2.5 group">
               <img
                 src="/logo.png"
-                alt="Bro-Ko-Le Logo"
+                alt="Brokole Logo"
                 className="w-10 h-10 rounded-2xl object-cover shadow-xs group-hover:scale-105 transition-transform"
               />
               <div className="flex flex-col">
                 <span className="font-black text-xl tracking-tight leading-none text-[var(--color-text-main)] flex items-center gap-0.5">
-                  Bro-<span className="text-[var(--color-primary)]">Ko</span>-Le
+                  Bro<span className="text-[var(--color-primary)]">kole</span>
                 </span>
                 <span className="text-[10px] font-bold tracking-wider text-[var(--color-text-muted)] uppercase">
                   Chef & Dietitian Meals

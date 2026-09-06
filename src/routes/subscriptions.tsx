@@ -5,7 +5,7 @@ import { SubscriptionPlans } from '../components/SubscriptionPlans';
 export const Route = createFileRoute('/subscriptions')({
   head: () => ({
     meta: [
-      { title: 'Meal Subscriptions & Plans — Bro-Ko-Le' },
+      { title: 'Meal Subscriptions & Plans - Brokole' },
       { name: 'description', content: 'Weekly and monthly macro meal subscriptions available for pre-order. Save up to 25% with dietitian-customized plans.' },
     ],
   }),

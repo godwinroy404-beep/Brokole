@@ -20,13 +20,13 @@ export const Route = createFileRoute('/')({
   },
   head: () => ({
     meta: [
-      { title: 'Bro-Ko-Le — Pre-Order Fresh Healthy Meals' },
+      { title: 'Brokole - Pre-Order Fresh Healthy Meals' },
       { name: 'description', content: 'Chef and dietitian-designed macro-balanced healthy meals. Pre-order fresh high protein, low carb, clean nutrition.' },
-      { property: 'og:title', content: 'Bro-Ko-Le — Pre-Order Fresh Healthy Meals' },
+      { property: 'og:title', content: 'Brokole - Pre-Order Fresh Healthy Meals' },
       { property: 'og:description', content: 'Macro-balanced, high-protein chef meals available for pre-order.' },
       { property: 'og:type', content: 'website' },
       { name: 'twitter:card', content: 'summary_large_image' },
-      { name: 'twitter:title', content: 'Bro-Ko-Le — Pre-Order Fresh Healthy Meals' },
+      { name: 'twitter:title', content: 'Brokole - Pre-Order Fresh Healthy Meals' },
       { property: 'twitter:description', content: 'Macro-balanced, high-protein chef meals available for pre-order.' },
     ],
   }),
@@ -77,7 +77,7 @@ function HomePage() {
   return (
     <div className="space-y-6">
       {/* SEO Title fallback */}
-      <title>Bro-Ko-Le — Pre-Order Fresh Healthy Meals</title>
+      <title>Brokole - Pre-Order Fresh Healthy Meals</title>
 
       {/* Hero Banner */}
       <HeroBanner />

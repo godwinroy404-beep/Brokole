@@ -3,7 +3,7 @@
  *
  * Replaces the Supabase client. The important difference is not the transport
  * but where security lives: with Supabase, Postgres RLS refused bad requests
- * even if this file was wrong. Against MySQL there is no such backstop — the
+ * even if this file was wrong. Against MySQL there is no such backstop - the
  * PHP API is the only thing enforcing who may see what. So this file never
  * decides anything; it just carries the token and reports what the server said.
  */
@@ -31,7 +31,7 @@ export function setToken(token: string | null): void {
     if (token) localStorage.setItem(TOKEN_KEY, token);
     else localStorage.removeItem(TOKEN_KEY);
   } catch {
-    /* private browsing — the session just won't persist */
+    /* private browsing - the session just won't persist */
   }
 }
 
@@ -63,7 +63,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new ApiError('Could not reach the server. Check your connection.', 0);
   }
 
-  // 401 means the token is gone or expired — clear it so the UI shows signed-out
+  // 401 means the token is gone or expired - clear it so the UI shows signed-out
   // rather than looping on requests that can never succeed.
   if (res.status === 401 && token !== 'demo-admin-token') setToken(null);
 
@@ -75,7 +75,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       data = JSON.parse(text) as Record<string, unknown>;
     } catch {
       /**
-       * The server replied with something that isn't JSON — almost always a
+       * The server replied with something that isn't JSON - almost always a
        * PHP error page or a host's 500/502 HTML. Surfacing the raw parse error
        * ("Unexpected token '<'...") tells the user nothing, so report the
        * status and a readable snippet instead.

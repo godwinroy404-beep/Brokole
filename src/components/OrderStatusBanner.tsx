@@ -14,7 +14,7 @@ const DELIVERED_AUTO_HIDE_MS = 60_000;
 
 /** When we first saw each order as completed/cancelled, so a page reload can't reset the clock. */
 const FIRST_SEEN_KEY = 'brokole-delivered-first-seen';
-/** Orders whose banner has already gone away — persisted so it stays away. */
+/** Orders whose banner has already gone away - persisted so it stays away. */
 const DISMISSED_KEY = 'brokole-banner-dismissed';
 
 function readJson(key: string): Record<string, number> {
@@ -35,7 +35,7 @@ function writeJson(key: string, value: Record<string, number>): void {
     );
     localStorage.setItem(key, JSON.stringify(trimmed));
   } catch {
-    /* private browsing — the banner just won't remember across reloads */
+    /* private browsing - the banner just won't remember across reloads */
   }
 }
 
@@ -267,19 +267,7 @@ export const OrderStatusBanner: React.FC = () => {
   };
 
   const statusInfo = getStatusDetails(activeOrder.status);
-
-  const statusLower = (activeOrder?.status || '').toLowerCase();
-  const isPackedOrBeyond =
-    statusLower.includes('packed') ||
-    statusLower.includes('rider') ||
-    statusLower.includes('out_for_delivery') ||
-    statusLower.includes('out for delivery') ||
-    statusLower.includes('delivered') ||
-    statusLower.includes('cancelled') ||
-    statusLower.includes('canceled') ||
-    statusLower.includes('refunded');
-
-  const isCancellable = activeOrder && !isPackedOrBeyond;
+  const isCancellable = activeOrder && !isDone(activeOrder.status);
 
   const handleCancelOrder = async () => {
     if (!activeOrder || isCancelling) return;
@@ -362,7 +350,7 @@ export const OrderStatusBanner: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-1.5 relative">
-                {/* Options Dropdown Button */}
+                {/* 3-Dot Options Dropdown Button */}
                 {isCancellable && (
                   <div className="relative">
                     <button
@@ -377,7 +365,7 @@ export const OrderStatusBanner: React.FC = () => {
                       <MoreVertical className="size-4" />
                     </button>
 
-                    {/* Dropdown Menu */}
+                    {/* Dropdown Menu Popup */}
                     {showDropdown && (
                       <div className="absolute right-0 top-full mt-1.5 w-44 bg-white border border-neutral-200 rounded-2xl shadow-xl z-30 py-1 overflow-hidden animate-scale-in">
                         <button

@@ -23,7 +23,7 @@ interface MeResponse {
  *
  * This decides what to RENDER, nothing more. Every endpoint re-checks the role
  * server-side, so patching this file in devtools to claim `owner` changes what
- * buttons appear and nothing else — the API still refuses.
+ * buttons appear and nothing else - the API still refuses.
  */
 export function useSession(): AdminSession {
   const [loading, setLoading] = useState(true);

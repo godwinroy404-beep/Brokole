@@ -45,7 +45,7 @@ interface AuthState {
  * What this replaces: a store that started with `isLoggedIn: true` and a
  * hardcoded demo user, whose `login()` returned true for ANY email with ANY
  * password. The token here is issued by the server after `password_verify`,
- * and every protected endpoint re-checks it — this file cannot grant access.
+ * and every protected endpoint re-checks it - this file cannot grant access.
  */
 function toProfile(u: ApiUser, current?: UserProfile | null): UserProfile {
   return {

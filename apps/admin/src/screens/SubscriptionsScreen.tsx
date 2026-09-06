@@ -78,9 +78,9 @@ function getFallbackSubscriptionOrders(): Order[] {
       customer_id: 'usr-roy',
       placed_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
-      notes: 'Bro-Ko-Le Shred & Gain Pro (7-Day Weekly) Goal Plan',
+      notes: 'Brokole Shred & Gain Pro (7-Day Weekly) Goal Plan',
       lines: [
-        { name_snapshot: 'Bro-Ko-Le Shred & Gain Pro (7-Day Weekly)', quantity: 1, unit_price: '1899', line_total: '1899' },
+        { name_snapshot: 'Brokole Shred & Gain Pro (7-Day Weekly)', quantity: 1, unit_price: '1899', line_total: '1899' },
       ],
       customer_name: 'r roy',
       phone: '+91 98765 00000',
@@ -103,7 +103,7 @@ function getFallbackSubscriptionOrders(): Order[] {
       created_at: new Date().toISOString(),
       notes: 'Muscle Build & Hypertrophy Goal Plan [SKIPPED_DAYS: 4, 11]',
       lines: [
-        { name_snapshot: 'Shred & Gain Pro (30 Days) — High Protein', quantity: 1, unit_price: '7499', line_total: '7499' },
+        { name_snapshot: 'Shred & Gain Pro (30 Days) - High Protein', quantity: 1, unit_price: '7499', line_total: '7499' },
       ],
       customer_name: 'Siddharth Rao',
       phone: '+91 98451 22910',
@@ -124,7 +124,7 @@ function getFallbackSubscriptionOrders(): Order[] {
       customer_id: 'usr-2',
       placed_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
-      notes: 'Elite Athlete Plan (30 Days) — Athletic Performance Goal Plan',
+      notes: 'Elite Athlete Plan (30 Days) - Athletic Performance Goal Plan',
       lines: [
         { name_snapshot: '30-Day Elite Athlete VIP Plan', quantity: 1, unit_price: '8999', line_total: '8999' },
       ],
@@ -458,7 +458,7 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
   const filteredOrders = useMemo(() => {
     return subscriptionOrders.filter((order) => {
       const subPlanTitle =
-        order.lines && order.lines.length > 0 ? order.lines[0].name_snapshot : 'Bro-Ko-Le Meal Subscription Plan';
+        order.lines && order.lines.length > 0 ? order.lines[0].name_snapshot : 'Brokole Meal Subscription Plan';
 
       // Text search
       const q = searchQuery.toLowerCase().trim();
@@ -694,7 +694,7 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                 const subPlanTitle =
                   order.lines && order.lines.length > 0
                     ? order.lines[0].name_snapshot
-                    : 'Bro-Ko-Le Meal Subscription Plan';
+                    : 'Brokole Meal Subscription Plan';
 
                 const isMonthly = subPlanTitle.toLowerCase().includes('monthly') || subPlanTitle.toLowerCase().includes('30-day');
                 const totalDays = isMonthly ? 30 : 7;
@@ -956,7 +956,7 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
               <tbody className="divide-y divide-neutral-100 font-medium text-xs">
                 {filteredOrders.map((order) => {
                   const subPlanTitle =
-                    order.lines && order.lines.length > 0 ? order.lines[0].name_snapshot : 'Bro-Ko-Le Meal Subscription Plan';
+                    order.lines && order.lines.length > 0 ? order.lines[0].name_snapshot : 'Brokole Meal Subscription Plan';
                   const goal = getCustomerGoalInfo(order, subPlanTitle);
                   const orderSkippedDays = (order as any).skipped_days || skippedDays;
 

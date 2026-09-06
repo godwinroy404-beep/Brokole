@@ -49,7 +49,7 @@ export const CartDrawer: React.FC = () => {
   };
 
   // Places the order in the database. The kitchen console sees it over Supabase
-  // Realtime a moment later — no BroadcastChannel, which only ever reached other
+  // Realtime a moment later - no BroadcastChannel, which only ever reached other
   // tabs in this same browser.
   const placeDirectOrder = async (name: string, phone: string, address: string) => {
     if (isPlacing) return;
@@ -144,7 +144,7 @@ export const CartDrawer: React.FC = () => {
           }
 
           toast.success('Order placed!', {
-            description: 'The kitchen has it — you can follow its progress above.',
+            description: 'The kitchen has it - you can follow its progress above.',
             duration: 5000,
           });
         }
@@ -164,7 +164,7 @@ export const CartDrawer: React.FC = () => {
         });
 
         toast.success(`Order #${createdOrder.id} recorded locally`, {
-          description: 'Demo mode — connect the API to send orders to the kitchen.',
+          description: 'Demo mode - connect the API to send orders to the kitchen.',
           duration: 5000,
         });
       }

@@ -12,7 +12,7 @@ export const Route = createFileRoute('/categories')({
   },
   head: () => ({
     meta: [
-      { title: 'Meal Categories — Bro-Ko-Le' },
+      { title: 'Meal Categories - Brokole' },
       { name: 'description', content: 'Explore healthy meal categories: High Protein, Low Carb, Keto, Vegan, Smoothies, and Snacks.' },
     ],
   }),

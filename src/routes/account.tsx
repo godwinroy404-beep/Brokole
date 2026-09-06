@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
-import { User, MapPin, Heart, Check, LogOut, ArrowRight, Package, Clock, Flame, ShoppingBag, Utensils, CheckCircle2, Truck, RefreshCw, Sparkles, Calendar, PauseCircle, PlayCircle, ShieldCheck, RotateCcw, XCircle, ChevronLeft, ChevronRight, FileText, Search, Filter } from 'lucide-react';
+import { User, MapPin, Heart, Check, LogOut, ArrowRight, Package, Clock, Flame, ShoppingBag, Utensils, CheckCircle2, Truck, RefreshCw, Sparkles, Calendar, PauseCircle, PlayCircle, ShieldCheck, RotateCcw, XCircle, ChevronLeft, ChevronRight, FileText, Search, Filter, MoreVertical } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useOrderStore, OrderStatus } from '../store/useOrderStore';
 import { useCartStore } from '../store/useCartStore';
@@ -18,8 +18,8 @@ function toIsoDate(d: Date): string {
 export const Route = createFileRoute('/account')({
   head: () => ({
     meta: [
-      { title: 'My Account & Subscription Calendar — Bro-Ko-Le' },
-      { name: 'description', content: 'Manage your Bro-Ko-Le profile, delivery addresses, meal plan calendar, skip days, and view order history.' },
+      { title: 'My Account & Subscription Calendar - Brokole' },
+      { name: 'description', content: 'Manage your Brokole profile, delivery addresses, meal plan calendar, skip days, and view order history.' },
     ],
   }),
   component: AccountPage,
@@ -48,6 +48,7 @@ function AccountPage() {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'calendar' | 'orders'>('profile');
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -233,7 +234,7 @@ function AccountPage() {
 
       const currentCustomerName = (user as any)?.name || (user as any)?.full_name || 'r roy';
       const currentCustomerPhone = (user as any)?.phone || '+91 98765 00000';
-      const currentPlanTitle = subOrder?.itemsSummary || 'Bro-Ko-Le Shred & Gain Pro (7-Day Weekly)';
+      const currentPlanTitle = subOrder?.itemsSummary || 'Brokole Shred & Gain Pro (7-Day Weekly)';
       const currentOrderId = subOrder?.id || 'BKL-SUB-701';
 
       void pushLocalOrderSync({
@@ -370,7 +371,7 @@ function AccountPage() {
 
   const handleLogout = () => {
     logout();
-    toast.info('Signed out of Bro-Ko-Le');
+    toast.info('Signed out of Brokole');
     navigate({ to: '/' });
   };
 
@@ -568,7 +569,7 @@ function AccountPage() {
 
           <div>
             <h1 className="text-2xl font-black text-[var(--color-text-main)] tracking-tight">
-              Sign In to Bro-Ko-Le
+              Sign In to Brokole
             </h1>
             <p className="text-xs text-[var(--color-text-muted)] font-medium mt-1 leading-relaxed">
               Access your saved delivery address, meal plan calendar, skip day controls, and order history.
@@ -598,101 +599,145 @@ function AccountPage() {
 
   return (
     <div className="space-y-6 px-4 sm:px-6 lg:px-8 py-4 max-w-4xl mx-auto">
-      {/* Profile Header Banner */}
-      <div className="bg-[var(--color-surface)] rounded-3xl p-6 shadow-xs carved-box">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-3xl bg-[var(--color-primary)] text-[var(--color-text-on-primary)] flex items-center justify-center font-black text-2xl shadow-md carved-btn shrink-0">
-              {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+      {/* Profile Header Banner (Matching Mockup Layout) */}
+      <div className="bg-[var(--color-surface)] rounded-3xl p-5 sm:p-6 shadow-sm border border-[var(--color-border)] relative carved-box space-y-4">
+        <div className="flex flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3.5 sm:gap-4">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#1d5927] text-white flex items-center justify-center font-black text-2xl shadow-sm shrink-0">
+              {user.name ? user.name.charAt(0).toUpperCase() : 'G'}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-[var(--color-text-main)] tracking-tight">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-[var(--color-text-main)] tracking-tight">
                   {user.name || 'Valued Customer'}
                 </h1>
                 {isVipCustomer ? (
-                  <span className="px-3 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-black uppercase inline-flex items-center gap-1">
-                    <span>VIP Subscriber</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#e1f5ea] text-[#136838] text-[10px] font-black uppercase inline-flex items-center gap-1">
+                    VIP SUBSCRIBER
                   </span>
                 ) : (
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-black uppercase">
-                    Verified Member
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase">
+                    VERIFIED MEMBER
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[var(--color-text-muted)] font-semibold mt-0.5">
+              <p className="text-xs text-[var(--color-text-muted)] font-semibold">
                 {user.email} {user.phone ? `• ${user.phone}` : ''}
               </p>
               {user.address && (
-                <p className="text-xs text-[var(--color-text-muted)] font-medium mt-1 line-clamp-1 flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />
+                <p className="text-xs text-[var(--color-text-muted)] font-medium line-clamp-1 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   <span>{user.address}</span>
                 </p>
               )}
             </div>
           </div>
+        </div>
 
+        {/* Bottom Actions Row: Sign Out on Left, Red 3-Dot Options Dropdown on Right */}
+        <div className="flex items-center justify-between pt-2 border-t border-[var(--color-border)]/60 relative">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-red-50 text-[var(--color-error)] text-xs font-extrabold hover:bg-red-100 transition-all cursor-pointer shrink-0 carved-btn"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-red-50 text-red-500 text-xs font-bold hover:bg-red-100 transition-all cursor-pointer border border-red-100/60 carved-btn"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-4 h-4 text-red-500" />
             <span>Sign Out</span>
           </button>
+
+          {/* Circular 3-Dot Vertical Options Menu Trigger (Matching img 2) */}
+          <div className="relative">
+            <button
+              onClick={() => setShowAccountMenu((prev) => !prev)}
+              aria-label="Account Menu Options"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-slate-200/90 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 shadow-2xs transition-all cursor-pointer flex items-center justify-center focus:outline-none"
+            >
+              <MoreVertical className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />
+            </button>
+
+            {/* Floating Dropdown Options Menu */}
+            {showAccountMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setShowAccountMenu(false)}
+                />
+                <div className="absolute right-0 bottom-full mb-2 w-64 bg-[var(--color-surface)] rounded-2xl shadow-xl border border-[var(--color-border)] py-2 z-30 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-1.5 text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">
+                    Account Navigation Options
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('profile');
+                      setShowAccountMenu(false);
+                    }}
+                    className={`w-full text-left px-3.5 py-2.5 text-xs font-extrabold flex items-center justify-between hover:bg-[var(--color-surface-hover)] transition-colors ${
+                      activeTab === 'profile'
+                        ? 'text-[var(--color-primary)] font-black bg-[var(--color-primary-light)]'
+                        : 'text-[var(--color-text-main)]'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-[var(--color-primary)]" />
+                      <span>My Profile & Address</span>
+                    </span>
+                    {activeTab === 'profile' && <Check className="w-3.5 h-3.5 text-[var(--color-primary)]" />}
+                  </button>
+
+                  {hasSubscriptionPlan && (
+                    <button
+                      onClick={() => {
+                        setActiveTab('calendar');
+                        setShowAccountMenu(false);
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 text-xs font-extrabold flex items-center justify-between hover:bg-[var(--color-surface-hover)] transition-colors ${
+                        activeTab === 'calendar'
+                          ? 'text-emerald-700 font-black bg-emerald-50'
+                          : 'text-[var(--color-text-main)]'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-emerald-600" />
+                        <span>Meal Plan Calendar</span>
+                      </span>
+                      {activeSkippedCount > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-400 text-emerald-950 text-[10px] font-black">
+                          {activeSkippedCount} Skipped
+                        </span>
+                      ) : activeTab === 'calendar' ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : null}
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('orders');
+                      setShowAccountMenu(false);
+                    }}
+                    className={`w-full text-left px-3.5 py-2.5 text-xs font-extrabold flex items-center justify-between hover:bg-[var(--color-surface-hover)] transition-colors ${
+                      activeTab === 'orders'
+                        ? 'text-[var(--color-primary)] font-black bg-[var(--color-primary-light)]'
+                        : 'text-[var(--color-text-main)]'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Package className="w-4 h-4 text-[var(--color-primary)]" />
+                      <span>Orders & History</span>
+                    </span>
+                    {orders.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] text-[10px] font-black">
+                        {orders.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex flex-wrap items-center gap-2 pb-1">
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${activeTab === 'profile'
-            ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] shadow-sm'
-            : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-            }`}
-        >
-          <User className="w-4 h-4" />
-          <span>My Profile & Address</span>
-        </button>
-
-        {/* Meal Plan Calendar — Only visible for customers who chose a Subscription Plan */}
-        {hasSubscriptionPlan && (
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all cursor-pointer ${activeTab === 'calendar'
-              ? 'bg-emerald-800 text-white shadow-sm'
-              : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-emerald-800'
-              }`}
-          >
-            <Calendar className="w-4 h-4 text-emerald-300" />
-            <span>Meal Plan Calendar</span>
-            {activeSkippedCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-400 text-emerald-950 text-[9px] font-black">
-                {activeSkippedCount} Skipped
-              </span>
-            )}
-          </button>
-        )}
-
-        <button
-          onClick={() => setActiveTab('orders')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-extrabold transition-all cursor-pointer relative ${activeTab === 'orders'
-            ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] shadow-sm'
-            : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-            }`}
-        >
-          <Package className="w-4 h-4" />
-          <span>Orders & History</span>
-          {orders.length > 0 && (
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'orders'
-              ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)]'
-              : 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'
-              }`}>
-              {orders.length}
-            </span>
-          )}
-        </button>
-      </div>
 
       {/* TAB 1: Profile & Preferences Form */}
       {activeTab === 'profile' && (
@@ -822,7 +867,7 @@ function AccountPage() {
                 <div className="text-right">
                   <span className="text-xs text-emerald-300 font-bold block">Active Subscription Plan:</span>
                   <span className="text-sm font-extrabold text-white">
-                    {subOrder ? (subOrder.itemsSummary || 'Weekly Flex Plan') : 'Bro-Ko-Le Weekly Flex Plan'}
+                    {subOrder ? (subOrder.itemsSummary || 'Weekly Flex Plan') : 'Brokole Weekly Flex Plan'}
                   </span>
                 </div>
               </div>
@@ -1159,27 +1204,22 @@ function AccountPage() {
             </button>
           </div>
 
-          {/* 4 Summary Ledger KPI Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-[var(--color-surface)] p-4 rounded-2xl carved-box space-y-1">
-              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Total Lifetime Spend</span>
-              <span className="text-lg font-black text-[var(--color-primary)] block">{formatCurrency(totalLifetimeSpent)}</span>
+          {/* Summary Ledger KPI Cards (Horizontal Row) */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-[var(--color-surface)] p-3 sm:p-4 rounded-2xl carved-box space-y-1">
+              <span className="text-[9px] sm:text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block truncate">Total Orders</span>
+              <span className="text-sm sm:text-lg font-black text-[var(--color-text-main)] block">{orders.length} Orders</span>
             </div>
 
-            <div className="bg-[var(--color-surface)] p-4 rounded-2xl carved-box space-y-1">
-              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Total Orders</span>
-              <span className="text-lg font-black text-[var(--color-text-main)] block">{orders.length} Orders</span>
+            <div className="bg-[var(--color-surface)] p-3 sm:p-4 rounded-2xl carved-box space-y-1">
+              <span className="text-[9px] sm:text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block truncate">Protein Delivered</span>
+              <span className="text-sm sm:text-lg font-black text-orange-500 block">{totalProteinDelivered}g Protein</span>
             </div>
 
-            <div className="bg-[var(--color-surface)] p-4 rounded-2xl carved-box space-y-1">
-              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Protein Delivered</span>
-              <span className="text-lg font-black text-orange-500 block">{totalProteinDelivered}g Protein</span>
-            </div>
-
-            <div className="bg-[var(--color-surface)] p-4 rounded-2xl carved-box space-y-1">
-              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Account Status</span>
-              <span className="text-lg font-black text-emerald-600 block">
-                {isVipCustomer ? 'VIP Member' : 'Verified Customer'}
+            <div className="bg-[var(--color-surface)] p-3 sm:p-4 rounded-2xl carved-box space-y-1">
+              <span className="text-[9px] sm:text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block truncate">Account Status</span>
+              <span className="text-sm sm:text-lg font-black text-emerald-600 block truncate">
+                {isVipCustomer ? 'VIP Member' : 'Verified'}
               </span>
             </div>
           </div>

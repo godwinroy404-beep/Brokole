@@ -1,4 +1,4 @@
-# Bro-Ko-Le — website copy rewrite
+# Bro-Ko-Le - website copy rewrite
 ## Six-day operating model · Saturday = Rest Day
 
 Prepared from the live site copy (hero, menu, DIY Bowl Studio, subscription section, 18 meals).
@@ -6,24 +6,24 @@ Design and UI structure unchanged unless a copy/UX change demands it.
 
 ---
 
-# G. Brand recommendation — read this first
+# G. Brand recommendation - read this first
 
 Everything below is written against **Option 2**, so decide this before using the copy.
 
-### Option 1 — "Kitchen Reset Day"
+### Option 1 - "Kitchen Reset Day"
 *Deep clean, restock, recalibrate.*
 Operational and quality-led. Honest and easy to explain. But it talks about **our** process, and asks the customer to care about our kitchen's housekeeping. It answers "what do you do?" rather than "what's in it for me?"
 
-### Option 2 — "Saturday is our Rest Day" ✅ **Recommended**
+### Option 2 - "Saturday is our Rest Day" ✅ **Recommended**
 *You take a rest day. So does our kitchen.*
-Uses the language your customer already lives in. Anyone training seriously knows a rest day isn't lost time — it's when the work actually pays off. That single borrowed idea does the whole job: it makes Saturday sound **disciplined rather than absent**, it needs no defending, and it flatters the customer by treating them as someone who understands training.
+Uses the language your customer already lives in. Anyone training seriously knows a rest day isn't lost time - it's when the work actually pays off. That single borrowed idea does the whole job: it makes Saturday sound **disciplined rather than absent**, it needs no defending, and it flatters the customer by treating them as someone who understands training.
 
 It also gives you a line that would be worth saying even if you opened seven days:
 **"Six days on. One day to reset. Same as you."**
 
-Keep "Kitchen Reset" as the *operational descriptor* — what happens on Rest Day — under the Rest Day banner. You get the brand hook and the quality proof.
+Keep "Kitchen Reset" as the *operational descriptor* - what happens on Rest Day - under the Rest Day banner. You get the brand hook and the quality proof.
 
-### Option 3 — "Sunday Prep Day"
+### Option 3 - "Sunday Prep Day"
 *Saturday is how Sunday is possible.*
 Forward-looking and softens the gap. But it's abstract, and it quietly implies the other five days are less prepared.
 
@@ -42,7 +42,7 @@ Forward-looking and softens the gap. But it's abstract, and it quietly implies t
 # Eat like you train. Six days a week.
 
 **Subheadline**
-High-protein, calorie-controlled meals with verified nutrition — cooked fresh and delivered in 30 minutes. Monday to Friday, and Sunday. Saturday, our kitchen rests, same as you.
+High-protein, calorie-controlled meals with verified nutrition - cooked fresh and delivered in 30 minutes. Monday to Friday, and Sunday. Saturday, our kitchen rests, same as you.
 
 **Primary CTA** → `Order Fresh Meals`
 **Secondary CTA** → `Track My Macros`
@@ -63,7 +63,7 @@ High-protein, calorie-controlled meals with verified nutrition — cooked fresh 
 Browse 18 chef-crafted dishes with the macros printed on every one. Or build your own in the Bowl Studio.
 
 **2 · Choose your days**
-Order one-off, or set a plan across our six delivery days. Saturday sits out — it's already excluded, so you never plan around it.
+Order one-off, or set a plan across our six delivery days. Saturday sits out - it's already excluded, so you never plan around it.
 
 **3 · Eat well, repeat**
 Fresh that morning, at your door in 30 minutes. Follow it in the app from kitchen to doorstep.
@@ -75,20 +75,20 @@ Fresh that morning, at your door in 30 minutes. Follow it in the app from kitche
 ### Six days of cooking. One day of getting better at it.
 
 **Verified macros, not estimates**
-Every dish carries real numbers — protein, calories, carbs, fat. Log it in seconds, not guesswork.
+Every dish carries real numbers - protein, calories, carbs, fat. Log it in seconds, not guesswork.
 
 **Fresh means fresh**
 Cooked the morning it reaches you. Zero preservatives, no reheated batches, nothing sitting in a cold chain for three days.
 
 **Rest Day is a quality decision**
-Saturday is when we deep-clean the kitchen, take in the week's produce, cost every recipe and give the team a real day off. Six focused days beats seven tired ones — and you can taste the difference on a Monday.
+Saturday is when we deep-clean the kitchen, take in the week's produce, cost every recipe and give the team a real day off. Six focused days beats seven tired ones - and you can taste the difference on a Monday.
 
 **A dietitian, not a chatbot**
 Plan members get 1-on-1 support to set targets that fit your training, not a generic calculator.
 
 ---
 
-## 4 · Meal descriptions — the pattern
+## 4 · Meal descriptions - the pattern
 
 Keep the existing macro-first card format. Sharpen the copy voice with this template:
 
@@ -98,19 +98,19 @@ Keep the existing macro-first card format. Sharpen the copy voice with this temp
 
 Worked examples:
 
-**Grilled Chicken & Brown Rice** — ₹180
+**Grilled Chicken & Brown Rice** - ₹180
 Clean, filling, and built to sit right after a heavy session. 38g protein, 520 kcal.
 
-**Quinoa Paneer Bowl** — ₹160
+**Quinoa Paneer Bowl** - ₹160
 The vegetarian one that actually holds its protein. Warm quinoa, seared paneer, 32g protein.
 
-**Berry Protein Smoothie** — ₹125
+**Berry Protein Smoothie** - ₹125
 Cold, quick, 26g of protein. For mornings you're already late.
 
-**Mediterranean Chicken & Hummus Bowl** — ₹160
+**Mediterranean Chicken & Hummus Bowl** - ₹160
 Lemon, herbs, and 36g of protein that doesn't taste like discipline.
 
-**Fresh Mix Cut Fruit Bowl** — ₹85
+**Fresh Mix Cut Fruit Bowl** - ₹85
 Cut this morning. That's the whole pitch.
 
 ---
@@ -119,7 +119,7 @@ Cut this morning. That's the whole pitch.
 
 ### Build it exactly how you want it
 
-Pick your grain base, your protein — chicken, salmon, paneer or tofu — four fresh vegetables and a house dressing. The macros update as you build, so you know the numbers before you order.
+Pick your grain base, your protein - chicken, salmon, paneer or tofu - four fresh vegetables and a house dressing. The macros update as you build, so you know the numbers before you order.
 
 **CTA** → `Build Your Bowl`
 
@@ -130,7 +130,7 @@ Pick your grain base, your protein — chicken, salmon, paneer or tofu — four 
 ### Fresh in 30 minutes, six days a week
 
 **Monday – Friday** · Regular service
-**Saturday** · Rest Day — kitchen reset, no deliveries
+**Saturday** · Rest Day - kitchen reset, no deliveries
 **Sunday** · Regular service
 
 Cooked the morning it's delivered. Track it live from kitchen to door.
@@ -143,9 +143,9 @@ Cooked the morning it's delivered. Track it live from kitchen to door.
 
 ### Weekly & monthly meal plans
 
-Healthy eating on autopilot — daily deliveries, 1-on-1 dietitian support, and pause or cancel whenever you like.
+Healthy eating on autopilot - daily deliveries, 1-on-1 dietitian support, and pause or cancel whenever you like.
 
-**Plans run on our six delivery days.** Saturday isn't in your plan, so it's never in your bill. Skip any other day and your plan simply runs a day longer — nothing expires, nothing is wasted.
+**Plans run on our six delivery days.** Saturday isn't in your plan, so it's never in your bill. Skip any other day and your plan simply runs a day longer - nothing expires, nothing is wasted.
 
 **CTA** → `View Plans`
 **Support line** → `Save up to 25% vs ordering daily`
@@ -159,7 +159,7 @@ Healthy eating on autopilot — daily deliveries, 1-on-1 dietitian support, and 
 | | |
 |---|---|
 | **Mon – Fri** | Fresh delivery, every day |
-| **Sat** | Rest Day — we reset, restock and deep-clean |
+| **Sat** | Rest Day - we reset, restock and deep-clean |
 | **Sun** | Fresh delivery, back as normal |
 
 **Plan Friday. We reset Saturday. Back Sunday.**
@@ -174,7 +174,7 @@ Every serious training week has a rest day in it. Ours is Saturday.
 
 The kitchen gets a deep clean. The week's produce comes in and gets checked. Recipes get re-costed and re-tasted. And the people who cook your food get a day that's actually theirs.
 
-It's the reason Monday tastes like Monday should — and the reason we'd rather run six good days than seven stretched ones.
+It's the reason Monday tastes like Monday should - and the reason we'd rather run six good days than seven stretched ones.
 
 **Six days on. One day to reset. Same as you.**
 
@@ -183,12 +183,12 @@ It's the reason Monday tastes like Monday should — and the reason we'd rather 
 ## 10 · FAQ
 
 **Which days do you deliver?**
-Monday to Friday, and Sunday. Saturday is our Rest Day — the kitchen resets, restocks and deep-cleans so the other six days stay sharp.
+Monday to Friday, and Sunday. Saturday is our Rest Day - the kitchen resets, restocks and deep-cleans so the other six days stay sharp.
 
 **Why don't you deliver on Saturdays?**
 Same reason you don't train seven days a week. One day of reset keeps quality and consistency where they should be. We'd rather do six days properly.
 
-**I'm on a plan — am I paying for Saturday?**
+**I'm on a plan - am I paying for Saturday?**
 No. Plans are built around our six delivery days, so Saturday was never in your schedule or your price.
 
 **What if I want food on Saturday?**
@@ -201,7 +201,7 @@ Any delivery day, from your Meal Plan Calendar. Your plan extends by a day, so y
 Cooked the morning it reaches you and delivered in about 30 minutes. No preservatives, no batch cooking days in advance.
 
 **Are the macros accurate?**
-They're calculated from the actual recipe, ingredient by ingredient — not estimated afterwards.
+They're calculated from the actual recipe, ingredient by ingredient - not estimated afterwards.
 
 **Where do you deliver?**
 Koramangala, Indiranagar, HSR Layout, Bellandur and Whitefield. Free delivery over ₹499.
@@ -219,15 +219,15 @@ Fresh, macro-balanced, high-protein meals delivered across Bengaluru.
 
 | # | Before (live now) | After | Why |
 |---|---|---|---|
-| 1 | **Pre-Order Fresh Healthy Meals** | **Eat like you train. Six days a week.** | "Pre-Order" describes your logistics, not their benefit — and it hints at waiting. The new line states the ethos *and* the six-day model in one breath, so Saturday never needs a separate announcement. |
-| 2 | *Fuel your fitness goals with targeted high-protein, calorie-controlled meals. Every dish features verified nutrition facts & premium organic ingredients.* | *High-protein, calorie-controlled meals with verified nutrition — cooked fresh and delivered in 30 minutes. Monday to Friday, and Sunday. Saturday, our kitchen rests, same as you.* | "Fuel your fitness goals" is the most replaceable sentence on the site. The rewrite keeps every claim, adds the 30-minute promise, and lands the schedule as a confident aside rather than a disclaimer. |
+| 1 | **Pre-Order Fresh Healthy Meals** | **Eat like you train. Six days a week.** | "Pre-Order" describes your logistics, not their benefit - and it hints at waiting. The new line states the ethos *and* the six-day model in one breath, so Saturday never needs a separate announcement. |
+| 2 | *Fuel your fitness goals with targeted high-protein, calorie-controlled meals. Every dish features verified nutrition facts & premium organic ingredients.* | *High-protein, calorie-controlled meals with verified nutrition - cooked fresh and delivered in 30 minutes. Monday to Friday, and Sunday. Saturday, our kitchen rests, same as you.* | "Fuel your fitness goals" is the most replaceable sentence on the site. The rewrite keeps every claim, adds the 30-minute promise, and lands the schedule as a confident aside rather than a disclaimer. |
 | 3 | `Pre-Order Fresh Meal` | `Order Fresh Meals` | Shorter, and drops the friction the word "pre-order" carries. |
 | 4 | *Macro-balanced, high-protein chef meals delivered in 30 minutes.* (meta description) | *Macro-balanced, high-protein meals delivered fresh in 30 minutes. Six days a week across Bengaluru.* | Adds the city for local search intent and states the model before anyone clicks. |
-| 5 | *Automate your fresh healthy eating with pre-order deliveries, 1-on-1 dietitian support & free pause/cancel.* | *Healthy eating on autopilot — daily deliveries, 1-on-1 dietitian support, and pause or cancel whenever you like.* **Plans run on our six delivery days…** | "Automate your fresh healthy eating" is a mouthful. The added second line kills the billing anxiety at the exact moment it would occur. |
+| 5 | *Automate your fresh healthy eating with pre-order deliveries, 1-on-1 dietitian support & free pause/cancel.* | *Healthy eating on autopilot - daily deliveries, 1-on-1 dietitian support, and pause or cancel whenever you like.* **Plans run on our six delivery days…** | "Automate your fresh healthy eating" is a mouthful. The added second line kills the billing anxiety at the exact moment it would occur. |
 | 6 | `Save 25% Monthly` | `Save up to 25% vs ordering daily` | "Up to" is accurate across four plans; "vs ordering daily" gives the number something to compare against. |
 | 7 | *18 chef-crafted high protein meals available now* | *18 chef-crafted meals, macros on every one* | "Available now" invites "…and on Saturday?" The macro promise is the stronger differentiator anyway. |
-| 8 | — (no schedule anywhere) | **Rest Day section + weekly schedule block** | Saturday currently has no story. Given a section of its own it reads as a decision; mentioned only in an FAQ it reads as an excuse. |
-| 9 | *Pick your exact grain base, protein… & house dressing!* | *…The macros update as you build, so you know the numbers before you order.* | Adds the reason to use the builder instead of just describing the mechanics. Drop the exclamation mark — the brand is confident, not shouty. |
+| 8 | - (no schedule anywhere) | **Rest Day section + weekly schedule block** | Saturday currently has no story. Given a section of its own it reads as a decision; mentioned only in an FAQ it reads as an excuse. |
+| 9 | *Pick your exact grain base, protein… & house dressing!* | *…The macros update as you build, so you know the numbers before you order.* | Adds the reason to use the builder instead of just describing the mechanics. Drop the exclamation mark - the brand is confident, not shouty. |
 
 ---
 
@@ -236,30 +236,30 @@ Fresh, macro-balanced, high-protein meals delivered across Bengaluru.
 **What a customer sees when they try to order for Saturday.**
 
 ### The date picker
-Saturday is present but not selectable — greyed, not hidden. A hidden date makes people think the site is broken; a labelled one teaches them the model in a second.
+Saturday is present but not selectable - greyed, not hidden. A hidden date makes people think the site is broken; a labelled one teaches them the model in a second.
 
 Label under the date: `Rest Day`
 
 ### On tap
 > **Saturday is our Rest Day.**
 > The kitchen resets so the rest of the week stays sharp.
-> **Friday** or **Sunday** — both delivering as normal.
+> **Friday** or **Sunday** - both delivering as normal.
 > `[ Order for Friday ]` `[ Order for Sunday ]`
 
-### Empty state — browsing on a Saturday
+### Empty state - browsing on a Saturday
 > **The kitchen's resetting today.**
 > Deep clean, fresh produce in, team off. Back tomorrow morning.
 > Browse the menu and line up Sunday's order now.
 > `[ Plan Sunday's meals ]`
 
-### Cart microcopy — Friday orders
-`Saturday is our Rest Day — add a little extra if you'll want it tomorrow.`
+### Cart microcopy - Friday orders
+`Saturday is our Rest Day - add a little extra if you'll want it tomorrow.`
 
-### Checkout confirmation — Friday
+### Checkout confirmation - Friday
 `Delivering Friday. We're back Sunday morning after Rest Day.`
 
 ### Meal Plan Calendar
-Saturday renders as a Rest Day tile — muted, non-interactive, no Skip button:
+Saturday renders as a Rest Day tile - muted, non-interactive, no Skip button:
 `Rest Day · kitchen reset`
 
 Never show a Skip control on a Saturday. Being able to "skip" a day nobody delivers implies you were being charged for it.
@@ -284,7 +284,7 @@ Never show a Skip control on a Saturday. Being able to "skip" a day nobody deliv
 > Skipped a day? Your plan runs a day longer. Rest Days don't count against it.
 
 **If they skip a Friday**
-`Friday skipped. Next delivery Sunday — Saturday is our Rest Day.`
+`Friday skipped. Next delivery Sunday - Saturday is our Rest Day.`
 
 ---
 
@@ -292,17 +292,17 @@ Never show a Skip control on a Saturday. Being able to "skip" a day nobody deliv
 
 ### Website banner (Fridays only)
 > **Friday. Stock up before Rest Day.**
-> We're back Sunday — add an extra bowl or a smoothie to see you through.
+> We're back Sunday - add an extra bowl or a smoothie to see you through.
 > `[ Add to Friday's order ]`
 
 ### Push notification
 **Title:** `Friday fuel 🍱`
-**Body:** `Rest Day tomorrow — grab an extra bowl for Saturday. Back Sunday morning.`
+**Body:** `Rest Day tomorrow - grab an extra bowl for Saturday. Back Sunday morning.`
 
 *Send 11:00, before the lunch order window.*
 
 ### WhatsApp
-> Hey {name} — Friday's here 🌿
+> Hey {name} - Friday's here 🌿
 >
 > Tomorrow's our Rest Day: the kitchen gets a deep clean and the team gets a proper break, so next week tastes the way it should.
 >
@@ -326,7 +326,7 @@ Never show a Skip control on a Saturday. Being able to "skip" a day nobody deliv
 *Send 09:30 Sunday.*
 
 ### WhatsApp (plan members)
-> Morning {name} — we're back 🌿
+> Morning {name} - we're back 🌿
 > Kitchen reset, fresh stock in, full menu live. Your plan picks up from today.
 > {link}
 
@@ -335,12 +335,12 @@ Never show a Skip control on a Saturday. Being able to "skip" a day nobody deliv
 
 ---
 
-# ⚠️ Flags — operational details I did not invent
+# ⚠️ Flags - operational details I did not invent
 
 Three things the copy above depends on that need your decision or a code change:
 
 **1 · "Weekly" plans are currently 7 days.**
-Your `plans` table has `days_included` of **7** (Weekly Flex, Weekly Pro) and **30** (Monthly). With Saturday closed, a weekly plan delivers **6 days** and a monthly one roughly **26**. Either change those numbers, or keep them and let plans simply run longer in calendar time — but the copy must match whichever you choose. **Selling "7 days" and delivering 6 is the one thing that would make Saturday feel like a loss.**
+Your `plans` table has `days_included` of **7** (Weekly Flex, Weekly Pro) and **30** (Monthly). With Saturday closed, a weekly plan delivers **6 days** and a monthly one roughly **26**. Either change those numbers, or keep them and let plans simply run longer in calendar time - but the copy must match whichever you choose. **Selling "7 days" and delivering 6 is the one thing that would make Saturday feel like a loss.**
 
 **2 · The Meal Plan Calendar generates 7 consecutive days.**
 Saturday will currently appear as a normal, skippable delivery day. It needs a non-interactive Rest Day state before this copy goes live, or the page will contradict itself.
@@ -348,7 +348,7 @@ Saturday will currently appear as a normal, skippable delivery day. It needs a n
 **3 · Subscription end-date maths.**
 `ends_on` should advance over Saturdays as well as over skipped days, otherwise a "30 delivery day" plan quietly becomes 26. Worth confirming before any plan is sold on the new copy.
 
-I can make all three changes in the code and the database — say the word.
+I can make all three changes in the code and the database - say the word.
 
 ---
 
@@ -363,7 +363,7 @@ Search intent retained naturally, no stuffing:
 - **local intent** → "across Bengaluru" + named zones in delivery and meta description
 
 **Suggested title tag**
-`Bro-Ko-Le — High-Protein Healthy Meals Delivered in Bengaluru`
+`Bro-Ko-Le - High-Protein Healthy Meals Delivered in Bengaluru`
 
 **Suggested meta description**
 `Macro-balanced, high-protein meals delivered fresh in 30 minutes. Six days a week across Bengaluru. Weekly & monthly meal plans with dietitian support.`

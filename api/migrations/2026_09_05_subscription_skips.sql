@@ -1,5 +1,5 @@
 -- ============================================================================
--- Brokole — subscription skips
+-- Brokole - subscription skips
 --
 -- Run once in phpMyAdmin (SQL tab). Safe to run more than once.
 --
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS subscription_skips (
 
   -- One row per customer per day: skipping twice is not a thing.
   UNIQUE KEY ss_user_date_uk (user_id, skip_date),
-  -- The kitchen asks "who is skipping tomorrow?" — that query needs this.
+  -- The kitchen asks "who is skipping tomorrow?" - that query needs this.
   KEY ss_date_idx (skip_date),
 
   CONSTRAINT ss_user_fk  FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS subscription_skips (
 
 -- Strip any leftover [SKIPPED_DAYS: ...] tag so notes go back to being notes.
 -- (Old tags carried a day number with no month, so there is nothing reliable to
--- migrate from them — customers re-pick their skip days in the calendar.)
+-- migrate from them - customers re-pick their skip days in the calendar.)
 UPDATE orders
    SET notes = NULLIF(TRIM(REGEXP_REPLACE(notes, '\\[SKIPPED_DAYS:[0-9, ]*\\]', '')), '')
  WHERE notes LIKE '%[SKIPPED_DAYS:%';

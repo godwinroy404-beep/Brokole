@@ -1,5 +1,5 @@
 -- ============================================================================
--- Brokole ERP — seed
+-- Brokole ERP - seed
 -- The 18 meals currently live on the storefront, with their real prices and
 -- macros. Idempotent: safe to run repeatedly.
 -- ============================================================================

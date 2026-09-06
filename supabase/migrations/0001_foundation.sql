@@ -1,10 +1,10 @@
 -- ============================================================================
--- Brokole ERP — 0001 foundation
+-- Brokole ERP - 0001 foundation
 -- Roles, outlets, profiles, permissions, audit trail, RLS helper functions.
 --
 -- Design rules enforced here (see claude/erp-architecture.md):
 --   * outlet_id exists from day one, even with a single kitchen
---   * role is NEVER settable by a client — only by an owner, via a trigger guard
+--   * role is NEVER settable by a client - only by an owner, via a trigger guard
 --   * every table gets RLS in the same migration that creates it
 --   * nothing is hard-deleted; deleted_at + audit_log instead
 -- ============================================================================
@@ -400,7 +400,7 @@ create policy audit_log_read on public.audit_log
 
 -- ── seed the first outlet ───────────────────────────────────────────────────
 insert into public.outlets (code, name, city, timezone)
-values ('BKL-BLR-01', 'Bro-Ko-Le Central Kitchen', 'Bengaluru', 'Asia/Kolkata')
+values ('BKL-BLR-01', 'Brokole Central Kitchen', 'Bengaluru', 'Asia/Kolkata')
 on conflict (code) do nothing;
 
 -- ── grants ──────────────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ export const Route = createFileRoute('/my-macros')({
   },
   head: () => ({
     meta: [
-      { title: 'My Macros & Calorie Tracker — Bro-Ko-Le' },
+      { title: 'My Macros & Calorie Tracker - Brokole' },
       { name: 'description', content: 'Calculate your daily target calories, protein, carbs, and fats using the Mifflin-St Jeor formula and find matching meals.' },
     ],
   }),

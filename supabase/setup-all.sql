@@ -1,5 +1,5 @@
 -- ============================================================================
--- BROKOLE ERP — COMPLETE DATABASE SETUP
+-- BROKOLE ERP - COMPLETE DATABASE SETUP
 --
 -- Paste this whole file into the Supabase SQL Editor and press Run.
 -- No CLI, no Docker, no linking required.
@@ -8,10 +8,10 @@
 -- partway you can fix the cause and simply run the whole file again.
 --
 -- Contents:
---   1. foundation — roles, outlets, profiles, permissions, audit trail, RLS
---   2. catalog    — categories, menu items, nutrition, bowl modifiers
---   3. orders     — addresses, orders, place_order(), the status state machine
---   4. seed       — your 18 real meals and the DIY Bowl Studio options
+--   1. foundation - roles, outlets, profiles, permissions, audit trail, RLS
+--   2. catalog    - categories, menu items, nutrition, bowl modifiers
+--   3. orders     - addresses, orders, place_order(), the status state machine
+--   4. seed       - your 18 real meals and the DIY Bowl Studio options
 --
 -- When it finishes, the result grid at the bottom tells you what was created.
 -- ============================================================================
@@ -23,12 +23,12 @@
 -- ═══════════════════════════════════════════════════════════════════════
 
 -- ============================================================================
--- Brokole ERP — 0001 foundation
+-- Brokole ERP - 0001 foundation
 -- Roles, outlets, profiles, permissions, audit trail, RLS helper functions.
 --
 -- Design rules enforced here (see claude/erp-architecture.md):
 --   * outlet_id exists from day one, even with a single kitchen
---   * role is NEVER settable by a client — only by an owner, via a trigger guard
+--   * role is NEVER settable by a client - only by an owner, via a trigger guard
 --   * every table gets RLS in the same migration that creates it
 --   * nothing is hard-deleted; deleted_at + audit_log instead
 -- ============================================================================
@@ -424,7 +424,7 @@ create policy audit_log_read on public.audit_log
 
 -- ── seed the first outlet ───────────────────────────────────────────────────
 insert into public.outlets (code, name, city, timezone)
-values ('BKL-BLR-01', 'Bro-Ko-Le Central Kitchen', 'Bengaluru', 'Asia/Kolkata')
+values ('BKL-BLR-01', 'Brokole Central Kitchen', 'Bengaluru', 'Asia/Kolkata')
 on conflict (code) do nothing;
 
 -- ── grants ──────────────────────────────────────────────────────────────────
@@ -451,7 +451,7 @@ grant execute on function public.has_permission(text)   to anon, authenticated;
 -- ═══════════════════════════════════════════════════════════════════════
 
 -- ============================================================================
--- Brokole ERP — 0002 catalog
+-- Brokole ERP - 0002 catalog
 -- Categories, menu items, nutrition, modifiers (the DIY Bowl Studio),
 -- and per-outlet availability.
 --
@@ -689,7 +689,7 @@ grant insert, update, delete on public.menu_item_modifier_groups to authenticate
 -- ═══════════════════════════════════════════════════════════════════════
 
 -- ============================================================================
--- Brokole ERP — 0003 orders
+-- Brokole ERP - 0003 orders
 -- Addresses, orders, order lines, status history, and the two RPCs that carry
 -- all the money logic.
 --
@@ -1086,7 +1086,7 @@ end $$;
 -- ═══════════════════════════════════════════════════════════════════════
 
 -- ============================================================================
--- Brokole ERP — seed
+-- Brokole ERP - seed
 -- The 18 meals currently live on the storefront, with their real prices and
 -- macros. Idempotent: safe to run repeatedly.
 -- ============================================================================
@@ -1210,7 +1210,7 @@ on conflict (modifier_group_id, slug) do update
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
---  Verification — every row below should read "ok"
+--  Verification - every row below should read "ok"
 -- ═══════════════════════════════════════════════════════════════════════════
 
 with checks as (

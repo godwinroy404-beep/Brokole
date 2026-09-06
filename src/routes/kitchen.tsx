@@ -40,7 +40,7 @@ import { toast } from 'sonner';
 export const Route = createFileRoute('/kitchen')({
   head: () => ({
     meta: [
-      { title: 'Private Executive Portal — Bro-Ko-Le' },
+      { title: 'Private Executive Portal - Brokole' },
       { name: 'description', content: 'Restricted Executive Kitchen Operations, Inventory & Live Orders Portal.' },
     ],
   }),
@@ -220,7 +220,7 @@ function KitchenPage() {
     };
 
     addProduct(newMeal);
-    toast.success(`Added "${title}" to Bro-Ko-Le menu!`, {
+    toast.success(`Added "${title}" to Brokole menu!`, {
       description: `₹${price} • ${protein}g Protein`,
     });
 
@@ -381,7 +381,7 @@ function KitchenPage() {
               className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
             >
               <Home className="w-4 h-4" />
-              <span>Return to Public Bro-Ko-Le Storefront</span>
+              <span>Return to Public Brokole Storefront</span>
             </Link>
           </div>
 
@@ -402,7 +402,7 @@ function KitchenPage() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-[var(--color-text-main)] tracking-tight">
-              Bro-Ko-Le Control Center
+              Brokole Control Center
             </h1>
             <p className="text-xs text-[var(--color-text-muted)] font-semibold">
               Authenticated Session: <strong className="text-[var(--color-primary)]">{adminEmail}</strong>
@@ -1277,7 +1277,7 @@ function KitchenPage() {
                 className="w-full py-3.5 px-4 rounded-2xl bg-[var(--color-primary)] text-[var(--color-text-on-primary)] font-black text-sm hover:bg-[var(--color-primary-hover)] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
               >
                 <Plus className="w-4 h-4 stroke-[3px]" />
-                <span>Publish Meal to Bro-Ko-Le</span>
+                <span>Publish Meal to Brokole</span>
               </button>
             </form>
           </div>
@@ -1290,7 +1290,7 @@ function KitchenPage() {
                   Live Catalog Items ({products.length})
                 </h2>
                 <p className="text-xs text-[var(--color-text-muted)]">
-                  Any changes here instantly reflect across Bro-Ko-Le storefront
+                  Any changes here instantly reflect across Brokole storefront
                 </p>
               </div>
               <button

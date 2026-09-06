@@ -1,5 +1,5 @@
 -- ============================================================================
--- BROKOLE ERP — MySQL schema
+-- BROKOLE ERP - MySQL schema
 --
 -- Paste this whole file into phpMyAdmin (Hostinger: hPanel -> Databases ->
 -- phpMyAdmin -> your database -> SQL tab) and press Go.
@@ -10,7 +10,7 @@
 -- MySQL has no Row Level Security. In the Postgres build the database itself
 -- refused to return another customer's order. Here that is impossible, so
 -- EVERY access rule is enforced in the PHP API instead. The database will
--- happily hand over any row to anyone holding the connection credentials —
+-- happily hand over any row to anyone holding the connection credentials -
 -- which is exactly why those credentials must never reach the browser, and why
 -- no query may be built from user input without a prepared statement.
 -- ============================================================================
@@ -292,7 +292,7 @@ CREATE TABLE IF NOT EXISTS subscription_skips (
 
   -- One row per customer per day: skipping twice is not a thing.
   UNIQUE KEY ss_user_date_uk (user_id, skip_date),
-  -- The kitchen asks "who is skipping tomorrow?" — that query needs this.
+  -- The kitchen asks "who is skipping tomorrow?" - that query needs this.
   KEY ss_date_idx (skip_date),
 
   CONSTRAINT ss_user_fk  FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,

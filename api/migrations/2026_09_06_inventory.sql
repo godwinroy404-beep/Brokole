@@ -1,11 +1,11 @@
 -- ============================================================================
--- Brokole — inventory
+-- Brokole - inventory
 --
 -- Run once. Safe to run more than once.
 --
 -- Stock is an APPEND-ONLY LEDGER, not a mutable quantity column. On-hand is
 -- derived by summing movements. The moment two things update a `quantity`
--- field at once you lose the ability to explain your own stock — and in a food
+-- field at once you lose the ability to explain your own stock - and in a food
 -- business that ledger is also the traceability trail.
 -- ============================================================================
 

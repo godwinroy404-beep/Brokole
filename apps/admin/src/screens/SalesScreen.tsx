@@ -12,7 +12,7 @@ import type { AdminSession } from '../lib/useSession';
  *  - The four headline figures are a KPI row of stat tiles, not a bar chart.
  *    Four unrelated magnitudes on one axis would be unreadable.
  *  - Daily revenue is ONE series, so it uses a sequential single hue and needs
- *    no legend — the heading says what is plotted.
+ *    no legend - the heading says what is plotted.
  *  - That hue is blue, not the console's emerald, because green already means
  *    "delivered / live" here. Reusing a status colour for a data series is how
  *    a chart starts lying about state.
@@ -171,7 +171,7 @@ export function SalesScreen({ session }: { session: AdminSession }) {
         </div>
       </div>
 
-      {/* KPI row — four headline numbers, not a chart */}
+      {/* KPI row - four headline numbers, not a chart */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {tiles.map((t) => (
           <div key={t.label} className="rounded-xl border border-neutral-200 bg-white p-4">
@@ -189,7 +189,7 @@ export function SalesScreen({ session }: { session: AdminSession }) {
         </p>
       )}
 
-      {/* daily revenue — one series, one hue, no legend needed */}
+      {/* daily revenue - one series, one hue, no legend needed */}
       <div className="rounded-xl border border-neutral-200 bg-white p-4">
         <div className="mb-1 flex items-center gap-1.5">
           <TrendingUp className="size-4 text-neutral-400" />
@@ -243,7 +243,7 @@ export function SalesScreen({ session }: { session: AdminSession }) {
         )}
       </div>
 
-      {/* sales history — also the table view the chart needs */}
+      {/* sales history - also the table view the chart needs */}
       <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
         <table className="w-full min-w-[820px] text-sm">
           <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-500">
@@ -269,7 +269,7 @@ export function SalesScreen({ session }: { session: AdminSession }) {
                 <td className="px-4 py-2.5 font-mono text-xs">{o.order_no}</td>
                 <td className="px-4 py-2.5 text-neutral-600">{o.business_date}</td>
                 <td className="px-4 py-2.5 text-neutral-600">
-                  {session.can('customers.read') ? (o.customer_name ?? o.customer_email ?? '—') : '—'}
+                  {session.can('customers.read') ? (o.customer_name ?? o.customer_email ?? '-') : '-'}
                 </td>
                 <td className="px-4 py-2.5">
                   {/* status is a labelled chip, never colour alone */}

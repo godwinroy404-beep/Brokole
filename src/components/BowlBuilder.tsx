@@ -180,7 +180,7 @@ export const BowlBuilder: React.FC = () => {
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-2xl bg-[var(--color-primary-muted)] text-[var(--color-accent)] text-xs font-extrabold mb-2 border border-[var(--color-accent-glow)]">
               <ChefHat className="w-3.5 h-3.5" />
-              <span>Bro-Ko-Le DIY Studio</span>
+              <span>Brokole DIY Studio</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
               Customize Your Power Bowl

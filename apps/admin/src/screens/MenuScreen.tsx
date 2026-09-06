@@ -799,7 +799,7 @@ const FALLBACK_MENU_ROWS: Row[] = [
                             <AlertTriangle className="size-3.5 text-amber-500 shrink-0" />
                           </span>
                         )}
-                        {n.calories > 0 ? Math.round(n.calories) : '—'}
+                        {n.calories > 0 ? Math.round(n.calories) : '-'}
                       </span>
                     </td>
 
@@ -809,7 +809,7 @@ const FALLBACK_MENU_ROWS: Row[] = [
                           <span className="text-emerald-700">{n.protein_g}g P</span> · {n.carbs_g}g C · {n.fat_g}g F
                         </span>
                       ) : (
-                        '—'
+                        '-'
                       )}
                     </td>
 

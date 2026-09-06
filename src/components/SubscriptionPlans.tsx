@@ -269,7 +269,7 @@ export const SubscriptionPlans: React.FC = () => {
     const customSubscriptionProduct: Product = {
       id: `sub-${plan.id}-${billingCycle}-${goal.id}`,
       handle: `subscription-${plan.id}`,
-      title: `Bro-Ko-Le ${plan.name} (${duration})`,
+      title: `Brokole ${plan.name} (${duration})`,
       productType: isTomorrow ? 'Pre-Order Delivery' : 'Meal Subscription',
       tags: [
         isTomorrow ? 'Pre-Order' : 'Subscription',
@@ -327,7 +327,7 @@ export const SubscriptionPlans: React.FC = () => {
         <div className="relative z-10 max-w-2xl text-center sm:text-left">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-2xl bg-[var(--color-primary-muted)] text-[var(--color-accent)] text-xs font-black mb-3 border border-[var(--color-accent-glow)]">
             <Calendar className="w-3.5 h-3.5" />
-            <span>Bro-Ko-Le Subscription Studio</span>
+            <span>Brokole Subscription Studio</span>
           </div>
           <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
             Put Your Nutrition on Autopilot <br className="hidden sm:inline" />
@@ -910,7 +910,7 @@ export const SubscriptionPlans: React.FC = () => {
                   <span>Choose Tomorrow's Meal from Full Menu</span>
                 </h3>
                 <p className="text-xs text-[var(--color-text-muted)] font-medium mt-0.5">
-                  Select any chef-crafted dish from Bro-Ko-Le's full menu for next-day dispatch.
+                  Select any chef-crafted dish from Brokole's full menu for next-day dispatch.
                 </p>
               </div>
 

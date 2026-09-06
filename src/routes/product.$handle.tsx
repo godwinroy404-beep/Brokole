@@ -17,9 +17,9 @@ export const Route = createFileRoute('/product/$handle')({
   },
   head: () => ({
     meta: [
-      { title: 'Meal details — Bro-Ko-Le healthy food delivery' },
-      { name: 'description', content: 'Detailed macro facts, ingredients, and nutrition info for Bro-Ko-Le chef-crafted meals.' },
-      { property: 'og:title', content: 'Meal details — Bro-Ko-Le healthy food delivery' },
+      { title: 'Meal details - Brokole healthy food delivery' },
+      { name: 'description', content: 'Detailed macro facts, ingredients, and nutrition info for Brokole chef-crafted meals.' },
+      { property: 'og:title', content: 'Meal details - Brokole healthy food delivery' },
       { property: 'og:description', content: 'Chef and dietitian-designed macro-balanced healthy meal details.' },
       { name: 'twitter:card', content: 'summary_large_image' },
     ],
@@ -71,7 +71,7 @@ function ProductDetailPage() {
   return (
     <div className="space-y-6 px-4 sm:px-6 lg:px-8 py-4">
       {/* SEO Title */}
-      <title>{`${product.title} — Bro-Ko-Le`}</title>
+      <title>{`${product.title} - Brokole`}</title>
 
       {/* Detail Page Sticky Sub-Header with Back Button & Cart */}
       <div className="flex items-center justify-between py-2 border-b border-[var(--color-border-subtle)] mb-4">
@@ -246,7 +246,7 @@ function ProductDetailPage() {
               {isAvailable ? (
                 <>
                   <Plus className="w-5 h-5 stroke-[3px]" />
-                  <span>Add to Cart — {formatCurrency(priceAmount * quantity)}</span>
+                  <span>Add to Cart - {formatCurrency(priceAmount * quantity)}</span>
                 </>
               ) : (
                 <span>Currently Out of Stock</span>

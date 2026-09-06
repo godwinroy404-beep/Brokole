@@ -10,7 +10,7 @@ import { isApiConfigured } from '../lib/api';
  * This used to be a persisted copy of SAMPLE_PRODUCTS in localStorage, which
  * meant every browser held its own private menu and a price change in the admin
  * console never reached anybody. It now loads from the database on mount, so
- * both apps read the same rows. Nothing is persisted — a stale cached menu is
+ * both apps read the same rows. Nothing is persisted - a stale cached menu is
  * worse than a brief loading state.
  */
 interface ProductState {

@@ -1,5 +1,5 @@
 -- ============================================================================
--- BROKOLE ERP — MySQL seed
+-- BROKOLE ERP - MySQL seed
 -- Run AFTER schema.sql, in the same phpMyAdmin SQL tab. Safe to re-run.
 -- ============================================================================
 SET NAMES utf8mb4;
@@ -42,7 +42,7 @@ INSERT IGNORE INTO role_permissions (role, permission_key) VALUES
 
 -- ── first outlet ────────────────────────────────────────────────────────────
 INSERT INTO outlets (id, code, name, city, timezone) VALUES
- (UUID(),'BKL-BLR-01','Bro-Ko-Le Central Kitchen','Bengaluru','Asia/Kolkata')
+ (UUID(),'BKL-BLR-01','Brokole Central Kitchen','Bengaluru','Asia/Kolkata')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- ── categories ──────────────────────────────────────────────────────────────

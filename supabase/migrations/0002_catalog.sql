@@ -1,5 +1,5 @@
 -- ============================================================================
--- Brokole ERP — 0002 catalog
+-- Brokole ERP - 0002 catalog
 -- Categories, menu items, nutrition, modifiers (the DIY Bowl Studio),
 -- and per-outlet availability.
 --

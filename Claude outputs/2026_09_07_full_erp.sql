@@ -1,5 +1,5 @@
 -- ============================================================================
--- Brokole — the rest of the ERP schema
+-- Brokole - the rest of the ERP schema
 --
 -- Run with:  php api/migrate.php
 --
@@ -135,7 +135,7 @@ ALTER TABLE subscription_skips
   ADD COLUMN IF NOT EXISTS subscription_id CHAR(36) NULL AFTER order_id;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 2 · RECIPES — the backbone
+-- 2 · RECIPES - the backbone
 --
 -- Right now a menu item's macros are typed in by hand and its cost is unknown.
 -- Once recipe_lines exist, BOTH come from the same rows, so the nutrition label
@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS recipe_lines (
   CONSTRAINT rl_ing_fk    FOREIGN KEY (ingredient_id) REFERENCES ingredients(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Food cost per portion, derived. Never store this — the moment an ingredient
+-- Food cost per portion, derived. Never store this - the moment an ingredient
 -- price changes, a stored copy is a lie.
 CREATE OR REPLACE VIEW recipe_costs AS
 SELECT
@@ -309,7 +309,7 @@ CREATE TABLE IF NOT EXISTS vendor_invoices (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 4 · PRODUCTION — what the kitchen has to cook today
+-- 4 · PRODUCTION - what the kitchen has to cook today
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS production_plans (
@@ -495,7 +495,7 @@ CREATE TABLE IF NOT EXISTS delivery_assignments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 7 · NUTRITION — the differentiator competitors can't copy by cutting prices
+-- 7 · NUTRITION - the differentiator competitors can't copy by cutting prices
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS customer_profiles (
@@ -599,7 +599,7 @@ INSERT IGNORE INTO role_permissions (role, permission_key) VALUES
   ('owner','delivery.assign'),    ('owner','nutrition.read'), ('owner','nutrition.write');
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 9 · SEED — the minimum that makes the new sections usable
+-- 9 · SEED - the minimum that makes the new sections usable
 -- ═══════════════════════════════════════════════════════════════════════════
 
 INSERT INTO plans (id, slug, name, description, billing_period, meals_per_day, days_included, price, discount_pct, sort_order)
@@ -612,10 +612,10 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), price = VALUES(price), description 
 
 INSERT INTO tax_rates (id, code, name, rate_pct, hsn_code, input_credit, effective_from)
 VALUES
- (UUID(),'GST-5-FOOD','GST 5% — restaurant food supply (no ITC)',5.00,'996331',0,'2026-01-01'),
- (UUID(),'GST-12-PKG','GST 12% — packaged food',12.00,'2106',1,'2026-01-01'),
- (UUID(),'GST-18-SVC','GST 18% — services',18.00,'9963',1,'2026-01-01'),
- (UUID(),'GST-0-FRESH','GST 0% — fresh produce',0.00,'0709',0,'2026-01-01')
+ (UUID(),'GST-5-FOOD','GST 5% - restaurant food supply (no ITC)',5.00,'996331',0,'2026-01-01'),
+ (UUID(),'GST-12-PKG','GST 12% - packaged food',12.00,'2106',1,'2026-01-01'),
+ (UUID(),'GST-18-SVC','GST 18% - services',18.00,'9963',1,'2026-01-01'),
+ (UUID(),'GST-0-FRESH','GST 0% - fresh produce',0.00,'0709',0,'2026-01-01')
 ON DUPLICATE KEY UPDATE name = VALUES(name), rate_pct = VALUES(rate_pct);
 
 INSERT INTO vendors (id, code, name, contact_name, phone, payment_terms)

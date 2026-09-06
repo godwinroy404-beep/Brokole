@@ -15,7 +15,7 @@ const DELIVERED_AUTO_HIDE_MS = 60_000;
 
 /** When we first saw each order as delivered, so a page reload can't reset the clock. */
 const FIRST_SEEN_KEY = 'brokole-delivered-first-seen';
-/** Orders whose banner has already gone away — persisted so it stays away. */
+/** Orders whose banner has already gone away - persisted so it stays away. */
 const DISMISSED_KEY = 'brokole-banner-dismissed';
 /** Orders the customer shrank to the small floating button. */
 const COMPACT_KEY = 'brokole-banner-compact';
@@ -38,7 +38,7 @@ function writeJson(key: string, value: Record<string, number>): void {
     );
     localStorage.setItem(key, JSON.stringify(trimmed));
   } catch {
-    /* private browsing — the banner just won't remember across reloads */
+    /* private browsing - the banner just won't remember across reloads */
   }
 }
 
@@ -183,7 +183,7 @@ export const OrderStatusBanner: React.FC = () => {
    * 1. The dependency list is the order's ID and delivered-ness, NOT the order
    *    object. Polling replaces `orders` with freshly-built objects every 6
    *    seconds, so depending on `activeOrder` meant the cleanup ran and the
-   *    timeout was recreated on every poll — the 60s never elapsed.
+   *    timeout was recreated on every poll - the 60s never elapsed.
    *
    * 2. The countdown starts when the order was FIRST seen as delivered, not
    *    when this component mounted. Otherwise a page reload at 0:59 restarts
@@ -314,7 +314,7 @@ export const OrderStatusBanner: React.FC = () => {
         <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40">
           <button
             onClick={() => setIsExpanded(true)}
-            title={`${activeOrder.id} — ${statusInfo.label}`}
+            title={`${activeOrder.id} - ${statusInfo.label}`}
             aria-label={`Order ${activeOrder.id}, ${statusInfo.label}. Open tracker.`}
             className="relative grid size-14 place-items-center rounded-full bg-neutral-900/95 text-white shadow-2xl border border-neutral-700/80 backdrop-blur-md transition-transform hover:scale-105 active:scale-95 cursor-pointer"
           >

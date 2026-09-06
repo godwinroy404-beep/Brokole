@@ -43,7 +43,7 @@ export const AuthModal: React.FC = () => {
 
         const success = await login(email, password);
         if (success) {
-          toast.success('Welcome back to Bro-Ko-Le!');
+          toast.success('Welcome back to Brokole!');
           return;
         }
 
@@ -79,7 +79,7 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
-        toast.success('Account created!', { description: 'Welcome to Bro-Ko-Le.' });
+        toast.success('Account created!', { description: 'Welcome to Brokole.' });
       }
     } finally {
       setBusy(false);
@@ -111,11 +111,11 @@ export const AuthModal: React.FC = () => {
         <div className="text-center mb-6">
           <img
             src="/logo.png"
-            alt="Bro-Ko-Le"
+            alt="Brokole"
             className="w-16 h-16 rounded-2xl object-cover shadow-md mx-auto mb-3 border-2 border-[var(--color-primary-light)]"
           />
           <h3 className="text-2xl font-black text-[var(--color-text-main)] tracking-tight">
-            {mode === 'login' ? 'Welcome Back' : 'Join Bro-Ko-Le'}
+            {mode === 'login' ? 'Welcome Back' : 'Join Brokole'}
           </h3>
           <p className="text-xs text-[var(--color-text-muted)] font-medium mt-1">
             {mode === 'login'
@@ -224,7 +224,7 @@ export const AuthModal: React.FC = () => {
             type="submit"
             className="w-full py-3.5 px-4 rounded-2xl bg-[var(--color-primary)] text-[var(--color-text-on-primary)] font-black text-sm hover:bg-[var(--color-primary-hover)] active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn mt-2"
           >
-            <span>{mode === 'login' ? 'Sign In to Bro-Ko-Le' : 'Create My Account'}</span>
+            <span>{mode === 'login' ? 'Sign In to Brokole' : 'Create My Account'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>

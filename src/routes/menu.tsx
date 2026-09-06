@@ -13,7 +13,7 @@ export const Route = createFileRoute('/menu')({
   },
   head: () => ({
     meta: [
-      { title: 'Full Menu — Bro-Ko-Le Healthy Chef Meals' },
+      { title: 'Full Menu - Brokole Healthy Chef Meals' },
       { name: 'description', content: 'Explore our full menu of macro-balanced, high-protein chef-crafted meals available for pre-order.' },
     ],
   }),

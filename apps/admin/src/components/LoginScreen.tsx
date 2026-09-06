@@ -6,7 +6,7 @@ import { api, setToken, isApiConfigured } from '../lib/api';
 
 /**
  * Staff sign-in. Three deliberate absences:
- *   1. No "create account" link — staff exist only because an owner made them.
+ *   1. No "create account" link - staff exist only because an owner made them.
  *   2. No password compared or stored in this bundle.
  *   3. No demo / bypass button.
  * The role check below is a courtesy so a customer gets a clear message instead

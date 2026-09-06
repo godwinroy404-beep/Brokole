@@ -52,7 +52,7 @@ async function fetchDiskOrders(): Promise<Order[]> {
         customer_id: o.userId || 'usr-demo',
         placed_at: o.createdAt || o.created_at || new Date().toISOString(),
         created_at: o.createdAt || o.created_at || new Date().toISOString(),
-        notes: o.notes || `${o.customerName || 'Customer'} (${o.customerPhone || ''}) — ${o.itemsSummary || 'Fresh Healthy Meals'}`,
+        notes: o.notes || `${o.customerName || 'Customer'} (${o.customerPhone || ''}) - ${o.itemsSummary || 'Fresh Healthy Meals'}`,
         lines: (o.itemsList || o.lines || []).map((item: any) => ({
           name_snapshot: item.title || item.name_snapshot,
           quantity: item.quantity,
@@ -98,7 +98,7 @@ function getFallbackOrders(): Order[] {
             customer_id: o.userId || 'usr-demo',
             placed_at: o.createdAt || new Date().toISOString(),
             created_at: o.createdAt || new Date().toISOString(),
-            notes: `${o.customerName || 'Customer'} (${o.customerPhone || ''}) — ${o.itemsSummary || 'High Protein Meals'}`,
+            notes: `${o.customerName || 'Customer'} (${o.customerPhone || ''}) - ${o.itemsSummary || 'High Protein Meals'}`,
             lines: (o.itemsList || []).map((item: any) => ({
               name_snapshot: item.title,
               quantity: item.quantity,
@@ -128,7 +128,7 @@ function getFallbackOrders(): Order[] {
       customer_id: 'usr-1',
       placed_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
-      notes: 'Alex Morgan (+91 70662 12122) — Koramangala',
+      notes: 'Alex Morgan (+91 70662 12122) - Koramangala',
       lines: [
         { name_snapshot: 'Quinoa Paneer Bowl', quantity: 1, unit_price: '280', line_total: '280' },
         { name_snapshot: 'Berry Protein Smoothie', quantity: 1, unit_price: '140', line_total: '140' },
@@ -148,7 +148,7 @@ function getFallbackOrders(): Order[] {
       customer_id: 'usr-2',
       placed_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
-      notes: 'Priya Sharma (+91 98230 44122) — Indiranagar',
+      notes: 'Priya Sharma (+91 98230 44122) - Indiranagar',
       lines: [
         { name_snapshot: 'Grilled Chicken & Brown Rice', quantity: 1, unit_price: '360', line_total: '360' },
       ],

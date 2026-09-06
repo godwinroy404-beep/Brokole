@@ -31,8 +31,8 @@ function toItem(r: ApiIngredient): InventoryItem {
     unit: r.unit,
     minThreshold: n(r.min_threshold),
     costPerUnit: n(r.cost_per_unit),
-    lastRestocked: (r.last_restocked ?? '').slice(0, 10) || '—',
-    supplier: r.supplier ?? '—',
+    lastRestocked: (r.last_restocked ?? '').slice(0, 10) || '-',
+    supplier: r.supplier ?? '-',
   };
 }
 

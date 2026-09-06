@@ -51,7 +51,7 @@ export interface Order {
    */
   id: string;
   /**
-   * The database UUID. Use THIS for any API call — passing `id` to an endpoint
+   * The database UUID. Use THIS for any API call - passing `id` to an endpoint
    * that expects a primary key silently fails the ownership check and comes
    * back as 403 "That order is not yours".
    */

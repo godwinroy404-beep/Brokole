@@ -1,5 +1,5 @@
 /**
- * @brokole/domain — the single source of truth shared by the customer app and
+ * @brokole/domain - the single source of truth shared by the customer app and
  * the admin console. If a rule lives here, the two apps cannot disagree about it.
  *
  * Nothing in this file talks to the network. It mirrors the database contract

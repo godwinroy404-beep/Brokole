@@ -18,7 +18,7 @@ export const NotFoundPage: React.FC = () => {
       {/* 404 Header Badge */}
       <div className="mb-2">
         <span className="text-xs font-black tracking-widest text-[var(--color-primary-muted)] uppercase bg-[var(--color-primary-light)] px-3 py-1 rounded-full border border-[var(--color-border)]">
-          404 — Page Not Found
+          404 - Page Not Found
         </span>
       </div>
 

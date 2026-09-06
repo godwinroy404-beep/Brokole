@@ -5,7 +5,7 @@ import { BowlBuilder } from '../components/BowlBuilder';
 export const Route = createFileRoute('/custom-bowl')({
   head: () => ({
     meta: [
-      { title: 'Customize Your Power Bowl — Bro-Ko-Le' },
+      { title: 'Customize Your Power Bowl - Brokole' },
       { name: 'description', content: 'Build your custom high-protein macro bowl with organic quinoa, grilled chicken, salmon, fresh veggies, and house dressings.' },
     ],
   }),
