@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>404 - Page Not Found - Brokole</title>
+    <meta name="description" content="Page not found on Brokole." />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <script>
+      // Single Page App redirect for static hosts (Vercel, GitHub Pages)
+      // Redirects 404 URL paths back into index.html so TanStack Router can render the 404 UI
+      sessionStorage.redirect = location.href;
+    </script>
+    <meta http-equiv="refresh" content="0;URL='/'">
+  </head>
+  <body style="font-family: 'Inter', sans-serif; background-color: #f8faf9; color: #1e2923; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-center;">
+    <div style="text-align: center; padding: 20px;">
+      <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 8px;">Loading Brokole...</h1>
+      <p style="font-size: 14px; color: #64748b;">Redirecting to page...</p>
+    </div>
+  </body>
+</html>
