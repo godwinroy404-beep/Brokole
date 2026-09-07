@@ -38,6 +38,38 @@ function localOrdersSyncPlugin() {
               }
               if (data.action === 'save_all') {
                 current = data.orders || []
+              } else if (data.action === 'delete' || data.action === 'cancel') {
+                const targetId = String(data.orderId || data.id || '').toLowerCase()
+                const targetNo = String(data.order_no || '').toLowerCase()
+                const targetName = String(data.customer_name || data.customerName || '').toLowerCase()
+
+                let found = false
+                current = current.map((o: any) => {
+                  const oId = String(o.id || '').toLowerCase()
+                  const oNo = String(o.order_no || '').toLowerCase()
+                  const oName = String(o.customer_name || o.customerName || '').toLowerCase()
+
+                  const matchesId = targetId && (oId === targetId || oNo === targetId)
+                  const matchesNo = targetNo && (oId === targetNo || oNo === targetNo)
+                  const matchesName = targetName && oName && oName === targetName && (targetId.includes('sub') || oNo.includes('sub'))
+
+                  if (matchesId || matchesNo || matchesName) {
+                    found = true
+                    return { ...o, status: 'Cancelled', deleted: true }
+                  }
+                  return o
+                })
+
+                if (!found && (targetId || targetNo)) {
+                  current.unshift({
+                    id: data.orderId || data.id || 'BKL-SUB-701',
+                    order_no: data.order_no || data.orderId || data.id || 'BKL-SUB-701',
+                    customer_name: data.customer_name || data.customerName || 'Customer',
+                    status: 'Cancelled',
+                    deleted: true,
+                    createdAt: new Date().toISOString(),
+                  })
+                }
               } else if (data.order) {
                 const idx = current.findIndex(
                   (o: any) =>

@@ -336,11 +336,47 @@ export const useOrderStore = create<OrderState>()(
             const key = o.id || o.serverId;
             if (key) {
               const existing = map.get(key);
-              map.set(key, existing ? { ...existing, ...o, status: o.status || existing.status } : o);
+              const isDiskCancelled =
+                (o.status || '').toLowerCase().includes('cancel') ||
+                (o.status || '').toLowerCase().includes('refund') ||
+                (o as any).deleted === true;
+
+              if (existing) {
+                map.set(key, {
+                  ...existing,
+                  ...o,
+                  status: isDiskCancelled ? 'Cancelled' : mapDbStatus(o.status || existing.status),
+                });
+              } else {
+                map.set(key, {
+                  ...o,
+                  status: isDiskCancelled ? 'Cancelled' : mapDbStatus(o.status),
+                });
+              }
             }
           }
 
-          // 3. Server orders (highest priority for official server state)
+          // 3. Check for any cancelled disk order matching existing orders by order_no, serverId, or customer_name
+          for (const [key, ord] of map.entries()) {
+            const isCancelledOnDisk = diskOrders.some((d) => {
+              const dSt = (d.status || '').toLowerCase();
+              const isCanc = dSt.includes('cancel') || dSt.includes('refund') || (d as any).deleted;
+              if (!isCanc) return false;
+
+              const dId = String(d.id || (d as any).order_no || d.serverId || '').toLowerCase();
+              const dNo = String((d as any).order_no || d.id || '').toLowerCase();
+              const ordId = String(ord.id || (ord as any).order_no || ord.serverId || '').toLowerCase();
+              const ordNo = String((ord as any).order_no || ord.id || '').toLowerCase();
+
+              return dId === ordId || dNo === ordId || dId === ordNo || dNo === ordNo;
+            });
+
+            if (isCancelledOnDisk) {
+              map.set(key, { ...ord, status: 'Cancelled' });
+            }
+          }
+
+          // 4. Server orders (highest priority for official server state)
           for (const o of serverOrders) {
             const key = o.id || o.serverId;
             if (key) map.set(key, o);

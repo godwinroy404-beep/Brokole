@@ -272,17 +272,6 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
   const [planFilter, setPlanFilter] = useState<'all' | '30days' | '7days' | 'skipped'>('all');
   const [skippedDays, setSkippedDays] = useState<number[]>([]);
   const [dismissedSubIds, setDismissedSubIds] = useState<string[]>([]);
-
-  const handleClearAllSubscriptions = () => {
-    const allSubIds = orders.map((o) => o.id || o.order_no);
-    const updated = [...new Set([...dismissedSubIds, ...allSubIds])];
-    setDismissedSubIds(updated);
-    try {
-      localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(updated));
-    } catch { /* ignore */ }
-    toast.success('All subscription cards cleared from view');
-  };
-
   const handleSyncLiveSubscriptions = async () => {
     setDismissedSubIds([]);
     try {
@@ -315,13 +304,107 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
     }
   };
 
-  const handleDismissSubscription = (orderId: string) => {
-    const updated = [...new Set([...dismissedSubIds, orderId])];
+  const handleDismissSubscription = async (orderId: string) => {
+    const targetOrder = orders.find((o) => o.id === orderId || o.order_no === orderId);
+    const orderNo = targetOrder?.order_no || orderId;
+    const custName = (targetOrder as any)?.customer_name || (targetOrder as any)?.customerName || '';
+
+    const updated = [...new Set([...dismissedSubIds, orderId, orderNo])];
     setDismissedSubIds(updated);
+    setOrders((prev) => prev.filter((o) => o.id !== orderId && o.order_no !== orderId && o.order_no !== orderNo));
     try {
       localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(updated));
     } catch { /* ignore */ }
-    toast.success('Subscription order removed from view');
+
+    try {
+      await fetch('/api/local-orders-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel',
+          orderId,
+          order_no: orderNo,
+          customer_name: custName,
+          order: { id: orderId, order_no: orderNo, customer_name: custName, status: 'Cancelled', deleted: true },
+        }),
+      });
+      await fetch('/api/local-orders-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          orderId,
+          order_no: orderNo,
+          customer_name: custName,
+        }),
+      });
+    } catch { /* ignore */ }
+
+    if (isApiConfigured) {
+      try {
+        await api.patch(`/orders/${encodeURIComponent(orderId)}/status`, { status: 'cancelled' });
+        if (orderNo && orderNo !== orderId) {
+          await api.patch(`/orders/${encodeURIComponent(orderNo)}/status`, { status: 'cancelled' }).catch(() => {});
+        }
+      } catch { /* ignore */ }
+    }
+
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+
+    toast.success('Subscription deleted & removed from customer profile');
+  };
+
+  const handleClearAllSubscriptions = async () => {
+    const allSubIds = orders.map((o) => o.id || o.order_no);
+    const updated = [...new Set([...dismissedSubIds, ...allSubIds])];
+    setDismissedSubIds(updated);
+    const targetOrders = [...orders];
+    setOrders([]);
+    try {
+      localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(updated));
+    } catch { /* ignore */ }
+
+    for (const targetOrder of targetOrders) {
+      const subId = targetOrder.id || targetOrder.order_no;
+      const orderNo = targetOrder.order_no || subId;
+      const custName = (targetOrder as any)?.customer_name || (targetOrder as any)?.customerName || '';
+
+      try {
+        await fetch('/api/local-orders-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'cancel',
+            orderId: subId,
+            order_no: orderNo,
+            customer_name: custName,
+            order: { id: subId, order_no: orderNo, customer_name: custName, status: 'Cancelled', deleted: true },
+          }),
+        });
+        await fetch('/api/local-orders-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'delete',
+            orderId: subId,
+            order_no: orderNo,
+            customer_name: custName,
+          }),
+        });
+      } catch { /* ignore */ }
+
+      if (isApiConfigured) {
+        try {
+          await api.patch(`/orders/${encodeURIComponent(subId)}/status`, { status: 'cancelled' });
+        } catch { /* ignore */ }
+      }
+    }
+
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+
+    toast.success('All subscription cards cleared & removed from customer profiles');
   };
 
   const fetchOrders = useCallback(async () => {

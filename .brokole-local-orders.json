@@ -1,27 +1,104 @@
 [
   {
-    "id": "ORD-3864",
+    "id": "ORD-4608",
     "userId": "1291004a-46eb-4172-b8ab-bf9211c9de88",
     "userEmail": "godwin@gmail.com",
     "customerName": "Godwin",
     "customerPhone": "121212121212",
     "customerAddress": "kapil Nagar\n",
-    "itemsSummary": "Fresh Mix Cut Fruit Bowl (Pre-Booked for Tomorrow) x1",
+    "itemsSummary": "Brokole Elite Athlete Plan (30-Day Monthly) x1",
     "itemsList": [
       {
-        "title": "Fresh Mix Cut Fruit Bowl (Pre-Booked for Tomorrow)",
+        "title": "Brokole Elite Athlete Plan (30-Day Monthly)",
         "quantity": 1,
-        "price": 85
+        "price": 8999
       }
     ],
-    "totalAmount": 118.25,
-    "proteinGrams": 3,
-    "calories": 120,
-    "status": "Cancelled",
-    "createdAt": "2026-09-07T00:45:46.180Z",
+    "totalAmount": 9448.95,
+    "proteinGrams": 130,
+    "calories": 1350,
+    "status": "New Order",
+    "createdAt": "2026-09-07T01:15:53.656Z",
     "timeFormatted": "Just now",
-    "isNew": false,
-    "serverId": "ORD-3864"
+    "isNew": true
+  },
+  {
+    "id": "ORD-9182",
+    "userId": "1291004a-46eb-4172-b8ab-bf9211c9de88",
+    "userEmail": "godwin@gmail.com",
+    "customerName": "Godwin",
+    "customerPhone": "121212121212",
+    "customerAddress": "kapil Nagar\n",
+    "itemsSummary": "Brokole Elite Athlete Plan (Single-Day Pre-Order (Tue, Sep 8)) x1",
+    "itemsList": [
+      {
+        "title": "Brokole Elite Athlete Plan (Single-Day Pre-Order (Tue, Sep 8))",
+        "quantity": 1,
+        "price": 499
+      }
+    ],
+    "totalAmount": 523.95,
+    "proteinGrams": 130,
+    "calories": 1350,
+    "status": "New Order",
+    "createdAt": "2026-09-07T01:15:35.893Z",
+    "timeFormatted": "Just now",
+    "isNew": true
+  },
+  {
+    "id": "ORD-8578",
+    "userId": "1291004a-46eb-4172-b8ab-bf9211c9de88",
+    "userEmail": "godwin@gmail.com",
+    "customerName": "Godwin",
+    "customerPhone": "121212121212",
+    "customerAddress": "kapil Nagar\n",
+    "itemsSummary": "Brokole Shred & Gain Pro (7-Day Weekly) x1",
+    "itemsList": [
+      {
+        "title": "Brokole Shred & Gain Pro (7-Day Weekly)",
+        "quantity": 1,
+        "price": 2399
+      }
+    ],
+    "totalAmount": 2518.95,
+    "proteinGrams": 95,
+    "calories": 900,
+    "status": "New Order",
+    "createdAt": "2026-09-07T01:15:21.036Z",
+    "timeFormatted": "Just now",
+    "isNew": true
+  },
+  {
+    "id": "sub-3",
+    "order_no": "BKL-SUB-303",
+    "customer_name": "Priya Sharma",
+    "status": "Cancelled",
+    "deleted": true,
+    "createdAt": "2026-09-07T01:11:40.264Z"
+  },
+  {
+    "id": "sub-2",
+    "order_no": "BKL-SUB-302",
+    "customer_name": "Ananya Deshmukh",
+    "status": "Cancelled",
+    "deleted": true,
+    "createdAt": "2026-09-07T01:11:38.465Z"
+  },
+  {
+    "id": "sub-roy-1",
+    "order_no": "BKL-SUB-701",
+    "customer_name": "r roy",
+    "status": "Cancelled",
+    "deleted": true,
+    "createdAt": "2026-09-07T01:11:37.968Z"
+  },
+  {
+    "id": "sub-1",
+    "order_no": "BKL-SUB-301",
+    "customer_name": "Siddharth Rao",
+    "status": "Cancelled",
+    "deleted": true,
+    "createdAt": "2026-09-07T01:11:36.619Z"
   },
   {
     "id": "ORD-3623",
@@ -76,30 +153,6 @@
     "status": "delivered"
   },
   {
-    "id": "BKL-260906-1005",
-    "order_no": "BKL-260906-1005",
-    "customer_name": "Godwin",
-    "phone": "121212121212",
-    "channel": "subscription",
-    "itemsSummary": "Brokole Shred & Gain Pro (30-Day Monthly) (30-Day Monthly Plan (Weight Maintenance & Wellness)) x1 (Shred & Gain Pro (30-Day Monthly))",
-    "totalAmount": 7873.95,
-    "proteinGrams": 95,
-    "calories": 900,
-    "skipped_days": [
-      "2026-09-10"
-    ],
-    "notes": "Brokole Shred & Gain Pro (30-Day Monthly) (30-Day Monthly Plan (Weight Maintenance & Wellness)) x1 (Shred & Gain Pro (30-Day Monthly)) [SKIPPED_DAYS: 2026-09-10]",
-    "lines": [
-      {
-        "name_snapshot": "Brokole Shred & Gain Pro (30-Day Monthly) (30-Day Monthly Plan (Weight Maintenance & Wellness)) x1 (Shred & Gain Pro (30-Day Monthly))",
-        "quantity": 1,
-        "unit_price": "1899",
-        "line_total": "1899"
-      }
-    ],
-    "status": "delivered"
-  },
-  {
     "id": "BKL-260906-1004",
     "status": "delivered"
   },
@@ -123,92 +176,6 @@
     "calories": 460,
     "status": "delivered",
     "createdAt": "2026-09-06T21:19:38.508Z",
-    "timeFormatted": "Just now",
-    "isNew": true
-  },
-  {
-    "id": "ORD-7932",
-    "userId": "usr-1788723497827",
-    "userEmail": "hedwinroy123@gmail.com",
-    "customerName": "roy",
-    "customerPhone": "123654987",
-    "customerAddress": "qwe adfgd vc vbbnv",
-    "itemsSummary": "Brokole Shred & Gain Pro (7-Day Weekly) x1",
-    "itemsList": [
-      {
-        "title": "Brokole Shred & Gain Pro (7-Day Weekly)",
-        "quantity": 1,
-        "price": 2399
-      }
-    ],
-    "totalAmount": 2518.95,
-    "proteinGrams": 95,
-    "calories": 900,
-    "status": "delivered",
-    "createdAt": "2026-09-06T20:46:48.401Z",
-    "timeFormatted": "Just now",
-    "isNew": true,
-    "serverId": "ORD-7932",
-    "skipped_days": [
-      "2026-09-15"
-    ],
-    "notes": "Brokole Shred & Gain Pro (7-Day Weekly) x1 [SKIPPED_DAYS: 2026-09-15]",
-    "order_no": "ORD-7932",
-    "customer_name": "roy",
-    "phone": "123654987",
-    "channel": "subscription",
-    "lines": [
-      {
-        "name_snapshot": "Brokole Shred & Gain Pro (7-Day Weekly) x1",
-        "quantity": 1,
-        "unit_price": "1899",
-        "line_total": "1899"
-      }
-    ]
-  },
-  {
-    "id": "ORD-9626",
-    "userId": "usr-1788723497827",
-    "userEmail": "hedwinroy123@gmail.com",
-    "customerName": "roy",
-    "customerPhone": "123654987",
-    "customerAddress": "qwe adfgd vc vbbnv",
-    "itemsSummary": "Brokole Elite Athlete Plan (7-Day Weekly) x1",
-    "itemsList": [
-      {
-        "title": "Brokole Elite Athlete Plan (7-Day Weekly)",
-        "quantity": 1,
-        "price": 2899
-      }
-    ],
-    "totalAmount": 3043.95,
-    "proteinGrams": 130,
-    "calories": 1350,
-    "status": "delivered",
-    "createdAt": "2026-09-06T20:43:53.697Z",
-    "timeFormatted": "Just now",
-    "isNew": true
-  },
-  {
-    "id": "ORD-3794",
-    "userId": "usr-1788723497827",
-    "userEmail": "hedwinroy123@gmail.com",
-    "customerName": "roy",
-    "customerPhone": "123654987",
-    "customerAddress": "qwe adfgd vc vbbnv",
-    "itemsSummary": "Brokole Shred & Gain Pro (30-Day Monthly) x1",
-    "itemsList": [
-      {
-        "title": "Brokole Shred & Gain Pro (30-Day Monthly)",
-        "quantity": 1,
-        "price": 7499
-      }
-    ],
-    "totalAmount": 7873.95,
-    "proteinGrams": 95,
-    "calories": 900,
-    "status": "delivered",
-    "createdAt": "2026-09-06T20:28:05.310Z",
     "timeFormatted": "Just now",
     "isNew": true
   },

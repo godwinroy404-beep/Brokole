@@ -184,6 +184,19 @@ function AccountPage() {
     if (isLoggedIn) {
       void loadMyOrders();
     }
+
+    const handleOrdersUpdated = () => {
+      if (isLoggedIn) {
+        void loadMyOrders();
+      }
+    };
+
+    window.addEventListener('storage', handleOrdersUpdated);
+    window.addEventListener('bkl-orders-updated', handleOrdersUpdated);
+    return () => {
+      window.removeEventListener('storage', handleOrdersUpdated);
+      window.removeEventListener('bkl-orders-updated', handleOrdersUpdated);
+    };
   }, [isLoggedIn, loadMyOrders]);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -375,9 +388,15 @@ function AccountPage() {
     navigate({ to: '/' });
   };
 
+  const isCancelled = (st?: string) => {
+    const s = (st || '').toLowerCase();
+    return s === 'cancelled' || s === 'canceled' || s === 'refunded';
+  };
+
   const subOrder = orders.find(
     (o) =>
-      (o.itemsSummary && (
+      !isCancelled(o.status) &&
+      ((o.itemsSummary && (
         o.itemsSummary.toLowerCase().includes('subscription') ||
         o.itemsSummary.toLowerCase().includes('plan') ||
         o.itemsSummary.toLowerCase().includes('weekly') ||
@@ -395,14 +414,15 @@ function AccountPage() {
           t.includes('pre-order') ||
           t.includes('pre-booked')
         );
-      }))
+      })))
   );
 
   const hasSubscriptionPlan = Boolean(subOrder);
 
   const isVipCustomer = orders.some(
     (o) =>
-      (o.itemsSummary && (
+      !isCancelled(o.status) &&
+      (((o.itemsSummary && (
         o.itemsSummary.toLowerCase().includes('subscription') ||
         o.itemsSummary.toLowerCase().includes('plan') ||
         o.itemsSummary.toLowerCase().includes('weekly') ||
@@ -417,7 +437,7 @@ function AccountPage() {
           t.includes('monthly')
         );
       })) ||
-      o.totalAmount >= 3000
+      o.totalAmount >= 3000))
   );
 
   const ROTATION = [
