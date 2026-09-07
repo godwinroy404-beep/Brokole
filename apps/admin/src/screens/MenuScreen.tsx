@@ -146,8 +146,8 @@ function processUploadedImage(file: File): Promise<string> {
       const img = document.createElement('img');
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 600;
-        const MAX_HEIGHT = 600;
+        const MAX_WIDTH = 350;
+        const MAX_HEIGHT = 350;
         let width = img.width;
         let height = img.height;
 
@@ -168,7 +168,7 @@ function processUploadedImage(file: File): Promise<string> {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
           resolve(dataUrl);
         } else {
           resolve(e.target?.result as string);
@@ -206,6 +206,7 @@ export function MenuScreen({ session }: { session: AdminSession }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imageMode, setImageMode] = useState<'upload' | 'url' | 'preset'>('upload');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form Fields
@@ -1064,8 +1065,36 @@ const FALLBACK_MENU_ROWS: Row[] = [
                       />
 
                       <div
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDragOver(true);
+                        }}
+                        onDragLeave={() => setIsDragOver(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDragOver(false);
+                          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            const file = e.dataTransfer.files[0];
+                            if (file.type.startsWith('image/')) {
+                              setIsUploadingImage(true);
+                              processUploadedImage(file)
+                                .then((url) => {
+                                  handleInputChange('image_url', url);
+                                  toast.success(`Uploaded image "${file.name}"!`);
+                                })
+                                .catch(() => toast.error('Failed to process image file'))
+                                .finally(() => setIsUploadingImage(false));
+                            } else {
+                              toast.error('Please select an image file');
+                            }
+                          }
+                        }}
                         onClick={() => fileInputRef.current?.click()}
-                        className="border-2 border-dashed border-emerald-300/80 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50/80 p-4 rounded-2xl text-center cursor-pointer transition space-y-2 group"
+                        className={`border-2 border-dashed p-4 rounded-2xl text-center cursor-pointer transition space-y-2 group ${
+                          isDragOver
+                            ? 'border-emerald-500 bg-emerald-100/60'
+                            : 'border-emerald-300/80 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50/80'
+                        }`}
                       >
                         {isUploadingImage ? (
                           <div className="flex flex-col items-center gap-1.5 py-2 text-emerald-700 font-extrabold">

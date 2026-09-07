@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useCartStore } from '../store/useCartStore';
 import { Product } from '../lib/shopify';
 import { formatCurrency } from '../lib/nutritionParser';
@@ -25,6 +25,7 @@ interface IngredientOption {
   category: 'base' | 'protein' | 'veggies' | 'sauce' | 'toppings';
   tag?: string;
   imageUrl: string;
+  inStock?: boolean;
 }
 
 const BASES: IngredientOption[] = [
@@ -64,15 +65,122 @@ const TOPPINGS: IngredientOption[] = [
   { id: 'top-4', name: 'Fresh Microgreens & Sesame', price: 10, calories: 10, protein: 1, carbs: 1, fat: 0, category: 'toppings', imageUrl: 'https://images.unsplash.com/photo-1589927986089-35812388d1f4?auto=format&fit=crop&w=200&q=80' },
 ];
 
+const POWER_BOWL_STORAGE_KEY = 'brokole-power-bowl-ingredients';
+
+function loadStoredIngredients(): IngredientOption[] {
+  try {
+    const raw = localStorage.getItem(POWER_BOWL_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.filter((i: any) => i && typeof i === 'object' && i.inStock !== false);
+      }
+    }
+  } catch {
+    /* fallback to defaults */
+  }
+  return [...BASES, ...PROTEINS, ...VEGGIES, ...SAUCES, ...TOPPINGS];
+}
+
 export const BowlBuilder: React.FC = () => {
   const addItem = useCartStore((state) => state.addItem);
 
-  const [selectedBase, setSelectedBase] = useState<IngredientOption>(BASES[0]);
-  const [selectedProtein, setSelectedProtein] = useState<IngredientOption>(PROTEINS[0]);
-  const [selectedVeggies, setSelectedVeggies] = useState<IngredientOption[]>([VEGGIES[0], VEGGIES[2]]);
-  const [selectedSauce, setSelectedSauce] = useState<IngredientOption>(SAUCES[0]);
-  const [selectedToppings, setSelectedToppings] = useState<IngredientOption[]>([TOPPINGS[0]]);
+  const [allIngredients, setAllIngredients] = useState<IngredientOption[]>(() => loadStoredIngredients());
+
+  // Listen for storage updates, window focus, & sync endpoint for instant sync with backend admin changes
+  useEffect(() => {
+    const syncIngredients = async () => {
+      const endpoints = ['/api/local-power-bowl-sync', 'http://localhost:5175/api/local-power-bowl-sync'];
+      for (const ep of endpoints) {
+        try {
+          const res = await fetch(ep);
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.ingredients) && data.ingredients.length > 0) {
+              const activeOnly = data.ingredients.filter((i: any) => i && typeof i === 'object' && i.inStock !== false);
+              setAllIngredients(activeOnly);
+              try {
+                localStorage.setItem(POWER_BOWL_STORAGE_KEY, JSON.stringify(data.ingredients));
+              } catch {}
+              return;
+            }
+          }
+        } catch {
+          /* ignore fetch errors */
+        }
+      }
+
+      // Fallback to localStorage if API is unreachable
+      setAllIngredients(loadStoredIngredients());
+    };
+
+    void syncIngredients();
+    const interval = setInterval(() => {
+      void syncIngredients();
+    }, 2500);
+
+    window.addEventListener('storage', syncIngredients);
+    window.addEventListener('focus', syncIngredients);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', syncIngredients);
+      window.removeEventListener('focus', syncIngredients);
+    };
+  }, []);
+
+  const bases = useMemo(() => {
+    const list = allIngredients.filter((i) => i.category === 'base');
+    return list.length > 0 ? list : BASES;
+  }, [allIngredients]);
+
+  const proteins = useMemo(() => {
+    const list = allIngredients.filter((i) => i.category === 'protein');
+    return list.length > 0 ? list : PROTEINS;
+  }, [allIngredients]);
+
+  const veggies = useMemo(() => {
+    const list = allIngredients.filter((i) => i.category === 'veggies');
+    return list.length > 0 ? list : VEGGIES;
+  }, [allIngredients]);
+
+  const sauces = useMemo(() => {
+    const list = allIngredients.filter((i) => i.category === 'sauce');
+    return list.length > 0 ? list : SAUCES;
+  }, [allIngredients]);
+
+  const toppings = useMemo(() => {
+    const list = allIngredients.filter((i) => i.category === 'toppings');
+    return list.length > 0 ? list : TOPPINGS;
+  }, [allIngredients]);
+
+  const [selectedBase, setSelectedBase] = useState<IngredientOption>(() => bases[0]);
+  const [selectedProtein, setSelectedProtein] = useState<IngredientOption>(() => proteins[0]);
+  const [selectedVeggies, setSelectedVeggies] = useState<IngredientOption[]>(() => veggies.slice(0, Math.min(2, veggies.length)));
+  const [selectedSauce, setSelectedSauce] = useState<IngredientOption>(() => sauces[0]);
+  const [selectedToppings, setSelectedToppings] = useState<IngredientOption[]>(() => toppings.slice(0, Math.min(1, toppings.length)));
   const [bowlName, setBowlName] = useState('My Custom Power Bowl');
+
+  // Keep active selections valid if options change dynamically
+  useEffect(() => {
+    if (!bases.some((b) => b.id === selectedBase?.id)) setSelectedBase(bases[0]);
+  }, [bases]);
+
+  useEffect(() => {
+    if (!proteins.some((p) => p.id === selectedProtein?.id)) setSelectedProtein(proteins[0]);
+  }, [proteins]);
+
+  useEffect(() => {
+    if (!sauces.some((s) => s.id === selectedSauce?.id)) setSelectedSauce(sauces[0]);
+  }, [sauces]);
+
+  const handleReset = () => {
+    setSelectedBase(bases[0]);
+    setSelectedProtein(proteins[0]);
+    setSelectedVeggies(veggies.slice(0, Math.min(2, veggies.length)));
+    setSelectedSauce(sauces[0]);
+    setSelectedToppings(toppings.slice(0, Math.min(1, toppings.length)));
+    toast.info('Reset bowl customization');
+  };
 
   // Toggle Veggie selection (max 4)
   const toggleVeggie = (veg: IngredientOption) => {
@@ -109,14 +217,7 @@ export const BowlBuilder: React.FC = () => {
   const totalCarbs = allSelected.reduce((sum, item) => sum + item.carbs, 0);
   const totalFat = Math.round(allSelected.reduce((sum, item) => sum + item.fat, 0));
 
-  const handleReset = () => {
-    setSelectedBase(BASES[0]);
-    setSelectedProtein(PROTEINS[0]);
-    setSelectedVeggies([VEGGIES[0], VEGGIES[2]]);
-    setSelectedSauce(SAUCES[0]);
-    setSelectedToppings([TOPPINGS[0]]);
-    toast.info('Reset bowl customization');
-  };
+
 
   const handleAddToCart = () => {
     if (selectedVeggies.length < 3) {
@@ -218,8 +319,8 @@ export const BowlBuilder: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {BASES.map((b) => {
-                const isSelected = selectedBase.id === b.id;
+              {bases.map((b) => {
+                const isSelected = selectedBase?.id === b.id;
                 return (
                   <button
                     key={b.id}
@@ -234,6 +335,9 @@ export const BowlBuilder: React.FC = () => {
                       src={b.imageUrl}
                       alt={b.name}
                       className="w-14 h-14 rounded-xl object-cover shrink-0 border border-[var(--color-border)] bg-white"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/images/hero_bowl.png';
+                      }}
                     />
                     <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
                       <div className="flex items-start justify-between gap-1">
@@ -261,13 +365,13 @@ export const BowlBuilder: React.FC = () => {
                 <span>Choose Your Protein (Select 1)</span>
               </h3>
               <span className="text-xs font-bold text-[var(--color-primary)]">
-                {selectedProtein.protein}g Protein
+                {selectedProtein?.protein || 0}g Protein
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {PROTEINS.map((p) => {
-                const isSelected = selectedProtein.id === p.id;
+              {proteins.map((p) => {
+                const isSelected = selectedProtein?.id === p.id;
                 return (
                   <button
                     key={p.id}
@@ -282,6 +386,9 @@ export const BowlBuilder: React.FC = () => {
                       src={p.imageUrl}
                       alt={p.name}
                       className="w-14 h-14 rounded-xl object-cover shrink-0 border border-[var(--color-border)] bg-white"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/images/hero_bowl.png';
+                      }}
                     />
                     <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
                       <div className="flex items-start justify-between gap-1">
@@ -329,7 +436,7 @@ export const BowlBuilder: React.FC = () => {
             )}
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {VEGGIES.map((v) => {
+              {veggies.map((v) => {
                 const isSelected = selectedVeggies.some((item) => item.id === v.id);
                 return (
                   <button
@@ -346,6 +453,9 @@ export const BowlBuilder: React.FC = () => {
                         src={v.imageUrl}
                         alt={v.name}
                         className="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/20 bg-white"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = '/images/hero_bowl.png';
+                        }}
                       />
                       <div className="min-w-0 flex-1">
                         <span className="font-extrabold text-xs leading-tight block truncate">{v.name}</span>
@@ -374,8 +484,8 @@ export const BowlBuilder: React.FC = () => {
                 <span>House Dressing (Select 1)</span>
               </h3>
               <div className="space-y-2.5">
-                {SAUCES.map((s) => {
-                  const isSelected = selectedSauce.id === s.id;
+                {sauces.map((s) => {
+                  const isSelected = selectedSauce?.id === s.id;
                   return (
                     <button
                       key={s.id}
@@ -391,6 +501,9 @@ export const BowlBuilder: React.FC = () => {
                           src={s.imageUrl}
                           alt={s.name}
                           className="w-9 h-9 rounded-xl object-cover shrink-0 border border-[var(--color-border)] bg-white"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = '/images/hero_bowl.png';
+                          }}
                         />
                         <span className="truncate">{s.name}</span>
                       </div>
@@ -408,7 +521,7 @@ export const BowlBuilder: React.FC = () => {
                 <span>Crunchy Toppings (Up to 2)</span>
               </h3>
               <div className="space-y-2.5">
-                {TOPPINGS.map((t) => {
+                {toppings.map((t) => {
                   const isSelected = selectedToppings.some((item) => item.id === t.id);
                   return (
                     <button
@@ -425,6 +538,9 @@ export const BowlBuilder: React.FC = () => {
                           src={t.imageUrl}
                           alt={t.name}
                           className="w-9 h-9 rounded-xl object-cover shrink-0 border border-white/20 bg-white"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = '/images/hero_bowl.png';
+                          }}
                         />
                         <span className="truncate">{t.name}</span>
                       </div>

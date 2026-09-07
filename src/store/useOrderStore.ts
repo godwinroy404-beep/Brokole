@@ -75,7 +75,7 @@ export interface Order {
 interface OrderState {
   orders: Order[];
   latestPlacedOrder: Order | null;
-  
+
   // Actions
   addOrder: (orderData: Partial<Order> & { customerName: string; totalAmount: number; itemsSummary: string }) => Order;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
@@ -95,7 +95,7 @@ interface OrderState {
 const INITIAL_SEED_ORDERS: Order[] = [];
 
 const RANDOM_NAMES = [
-  'Vikram Mehta', 'Neha Kapoor', 'Siddharth Rao', 'Kavya Nair', 
+  'Vikram Mehta', 'Neha Kapoor', 'Siddharth Rao', 'Kavya Nair',
   'Arjun Sengupta', 'Tanya Deshmukh', 'Rahul Oberoi', 'Simran Gill'
 ];
 
@@ -183,8 +183,8 @@ export const useOrderStore = create<OrderState>()(
           const key = target?.serverId || target?.id || orderId;
 
           import('../lib/api').then(({ api }) => {
-            void api.patch(`/orders/${encodeURIComponent(key)}/status`, { status: dbStatus }).catch(() => {});
-          }).catch(() => {});
+            void api.patch(`/orders/${encodeURIComponent(key)}/status`, { status: dbStatus }).catch(() => { });
+          }).catch(() => { });
         }
       },
 
@@ -238,7 +238,7 @@ export const useOrderStore = create<OrderState>()(
         // If backend API is configured, notify it in background without failing UI
         if (isApiConfigured) {
           const key = order.serverId || order.id;
-          void cancelOrderApi(key, reason).catch(() => {});
+          void cancelOrderApi(key, reason).catch(() => { });
         }
 
         return { ok: true };

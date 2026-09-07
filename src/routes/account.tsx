@@ -1043,12 +1043,6 @@ function AccountPage() {
               ) : (
                 /* FOR 30-DAY / MONTHLY SUBSCRIPTION PLAN CUSTOMERS: SHOW FULL MONTHLY CALENDAR GRID */
                 <div className="space-y-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-emerald-100">
-                    <div className="text-[11px] text-emerald-800 font-extrabold flex items-center gap-2">
-                      <span className="inline-block size-2 rounded-full bg-emerald-600" />
-                      <span>Dots mark delivery dates. Click day tile to toggle skip.</span>
-                    </div>
-                  </div>
 
 
 
@@ -1385,37 +1379,7 @@ function AccountPage() {
                       )}
                     </div>
 
-                    {/* Financial Ledger & Customer Info Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      {/* Customer Address & Contact Info */}
-                      <div className="bg-[var(--color-surface-hover)] p-3 rounded-2xl space-y-1">
-                        <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Delivery Destination</span>
-                        <div className="text-xs font-semibold text-[var(--color-text-main)] flex items-start gap-1.5 pt-0.5">
-                          <MapPin className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0 mt-0.5" />
-                          <span className="leading-snug">{order.customerAddress || 'Address Provided at Checkout'}</span>
-                        </div>
-                      </div>
 
-                      {/* Financial Breakdown Ledger Box */}
-                      <div className="bg-emerald-950/5 p-3 rounded-2xl border border-emerald-100 space-y-1 text-xs">
-                        <div className="flex justify-between text-[11px] text-neutral-600 font-semibold">
-                          <span>Items Subtotal:</span>
-                          <span>{formatCurrency(subtotal)}</span>
-                        </div>
-                        <div className="flex justify-between text-[11px] text-neutral-600 font-semibold">
-                          <span>Taxes (5% GST):</span>
-                          <span>{formatCurrency(tax)}</span>
-                        </div>
-                        <div className="flex justify-between text-[11px] text-emerald-700 font-bold">
-                          <span>Delivery Charge:</span>
-                          <span>FREE</span>
-                        </div>
-                        <div className="flex justify-between text-sm font-black text-[var(--color-primary)] pt-1 border-t border-emerald-200">
-                          <span>Total Amount Paid:</span>
-                          <span>{formatCurrency(order.totalAmount)}</span>
-                        </div>
-                      </div>
-                    </div>
 
                     {/* Bottom Toolbar Action Buttons */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">

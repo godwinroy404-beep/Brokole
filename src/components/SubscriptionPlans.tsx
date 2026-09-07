@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useCartStore } from '../store/useCartStore';
 import { useMacroStore } from '../store/useMacroStore';
 import { useProductStore } from '../store/useProductStore';
@@ -157,6 +157,21 @@ export const SubscriptionPlans: React.FC = () => {
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
 
+  // Custom Meal Select Dropdown State
+  const [isMealDropdownOpen, setIsMealDropdownOpen] = useState(false);
+  const [dropdownSearch, setDropdownSearch] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsMealDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
@@ -176,7 +191,7 @@ export const SubscriptionPlans: React.FC = () => {
     price: 0,
     protein: 0,
     calories: 0,
-    image: '/images/hero_bowl.png',
+    image: '',
   });
 
   const TOMORROW_MEALS = [
@@ -340,7 +355,7 @@ export const SubscriptionPlans: React.FC = () => {
       </div>
 
       {/* 🚀 BOOK FOR TOMORROW PRE-ORDER SECTION */}
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 shadow-card relative overflow-hidden space-y-6 carved-box">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 shadow-card relative space-y-6 carved-box">
         <div className="absolute top-0 right-0 w-80 h-80 bg-[var(--color-primary-light)] opacity-40 rounded-full blur-3xl pointer-events-none" />
 
         {/* Section Header */}
@@ -475,37 +490,124 @@ export const SubscriptionPlans: React.FC = () => {
             {/* Compact Menu Select & Pre-Book Action Button */}
             <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
               
-              {/* Compact Menu Select */}
-              <div className="relative w-full sm:w-64 shrink-0">
-                <select
-                  value={selectedTomorrowMeal.id}
-                  onChange={(e) => {
-                    const found = storeProducts.find((p) => p.id === e.target.value);
-                    if (found) {
-                      const mealPrice = parseFloat(found.priceRange.minVariantPrice.amount);
-                      setSelectedTomorrowMeal({
-                        id: found.id,
-                        name: found.title,
-                        price: mealPrice,
-                        protein: found.nutrition.protein,
-                        calories: found.nutrition.calories,
-                        image: found.featuredImage.url,
-                      });
-                      toast.success(`Selected "${found.title}" for Tomorrow!`, {
-                        description: `${found.nutrition.protein}g Protein • ${formatCurrency(mealPrice)}`,
-                      });
-                    }
-                  }}
-                  className="w-full py-2.5 px-3 pr-8 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-extrabold text-[var(--color-text-main)] appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] shadow-xs truncate"
+              {/* Custom Styled Meal Select Dropdown */}
+              <div className="relative w-full sm:w-72 shrink-0" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsMealDropdownOpen(!isMealDropdownOpen)}
+                  className="w-full py-2.5 px-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-primary-muted)] text-xs font-extrabold text-[var(--color-text-main)] transition-all cursor-pointer shadow-xs flex items-center justify-between gap-2 carved-btn"
                 >
-                  <option value="" disabled>-- Select Meal --</option>
-                  {storeProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title} • {formatCurrency(parseFloat(p.priceRange.minVariantPrice.amount))} ({p.nutrition.protein}g P)
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-[var(--color-text-muted)] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <div className="flex items-center gap-2 truncate">
+                    {selectedTomorrowMeal.name && selectedTomorrowMeal.image ? (
+                      <img
+                        src={selectedTomorrowMeal.image}
+                        alt=""
+                        className="size-5 rounded-md object-cover shrink-0 border border-[var(--color-border)]"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = '/images/hero_bowl.png';
+                        }}
+                      />
+                    ) : (
+                      <Utensils className="size-3.5 text-[var(--color-primary)] shrink-0" />
+                    )}
+                    <span className="truncate font-bold">
+                      {selectedTomorrowMeal.name || '-- Select Meal --'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {selectedTomorrowMeal.price > 0 && (
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-[var(--color-primary-light)] text-[var(--color-primary)]">
+                        {formatCurrency(selectedTomorrowMeal.price)}
+                      </span>
+                    )}
+                    <ChevronDown className={`size-4 text-[var(--color-text-muted)] transition-transform duration-200 ${isMealDropdownOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </button>
+
+                {/* Dropdown Popover (Opens Upwards Above Button) */}
+                {isMealDropdownOpen && (
+                  <div className="absolute right-0 bottom-full mb-2 w-full sm:w-80 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-2xl z-[100] overflow-hidden animate-fade-in carved-box">
+                    {/* Filter Search */}
+                    <div className="p-2 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]">
+                      <div className="relative">
+                        <Search className="size-3.5 text-[var(--color-text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Search meals..."
+                          value={dropdownSearch}
+                          onChange={(e) => setDropdownSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Meal Options Scroll View */}
+                    <div className="max-h-64 overflow-y-auto no-scrollbar p-1.5 space-y-1">
+                      {storeProducts
+                        .filter((p) =>
+                          !dropdownSearch || p.title.toLowerCase().includes(dropdownSearch.toLowerCase())
+                        )
+                        .map((p) => {
+                          const mealPrice = parseFloat(p.priceRange.minVariantPrice.amount);
+                          const isSelected = selectedTomorrowMeal.id === p.id;
+
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedTomorrowMeal({
+                                  id: p.id,
+                                  name: p.title,
+                                  price: mealPrice,
+                                  protein: p.nutrition.protein,
+                                  calories: p.nutrition.calories,
+                                  image: p.featuredImage.url,
+                                });
+                                setIsMealDropdownOpen(false);
+                                setDropdownSearch('');
+                                toast.success(`Selected "${p.title}" for Tomorrow!`, {
+                                  description: `${p.nutrition.protein}g Protein • ${formatCurrency(mealPrice)}`,
+                                });
+                              }}
+                              className={`w-full p-2 rounded-xl text-left transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                                isSelected
+                                  ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)] font-black'
+                                  : 'hover:bg-[var(--color-surface-hover)] text-[var(--color-text-main)]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <img
+                                  src={p.featuredImage.url}
+                                  alt={p.title}
+                                  className="size-8 rounded-lg object-cover border border-[var(--color-border)] shrink-0 bg-white"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = '/images/hero_bowl.png';
+                                  }}
+                                />
+                                <div className="min-w-0">
+                                  <span className="text-xs font-extrabold block truncate leading-tight">
+                                    {p.title}
+                                  </span>
+                                  <span className="text-[10px] text-[var(--color-text-muted)] font-medium block">
+                                    {p.nutrition.protein}g Protein · {p.nutrition.calories} kcal
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="text-xs font-black text-[var(--color-text-main)]">
+                                  {formatCurrency(mealPrice)}
+                                </span>
+                                {isSelected && <Check className="size-4 text-[var(--color-primary)] stroke-[3]" />}
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Action Button */}

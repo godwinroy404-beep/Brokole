@@ -81,6 +81,59 @@ function localOrdersSyncPlugin() {
   }
 }
 
+function localPowerBowlSyncPlugin() {
+  const filePath = path.resolve(__dirname, '.brokole-local-power-bowl.json')
+
+  return {
+    name: 'local-power-bowl-sync-plugin',
+    configureServer(server: any) {
+      server.middlewares.use('/api/local-power-bowl-sync', (req: any, res: any) => {
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204
+          res.end()
+          return
+        }
+
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: any) => { body += chunk })
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body)
+              const ingredients = data.ingredients || []
+              fs.writeFileSync(filePath, JSON.stringify(ingredients, null, 2))
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: true, ingredients }))
+            } catch (err: any) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ ok: false, error: err.message }))
+            }
+          })
+          return
+        }
+
+        if (req.method === 'GET') {
+          let ingredients: any[] = []
+          if (fs.existsSync(filePath)) {
+            try {
+              ingredients = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+            } catch {
+              ingredients = []
+            }
+          }
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ ok: true, ingredients }))
+          return
+        }
+      })
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
     TanStackRouterVite({
@@ -90,6 +143,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     localOrdersSyncPlugin(),
+    localPowerBowlSyncPlugin(),
   ],
   resolve: {
     alias: {
@@ -103,5 +157,3 @@ export default defineConfig({
     strictPort: true,
   },
 })
-
-

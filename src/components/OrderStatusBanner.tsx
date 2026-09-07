@@ -8,9 +8,9 @@ import { formatCurrency } from '../lib/nutritionParser';
 import { toast } from 'sonner';
 
 /**
- * How long the "Delivered" or "Cancelled" banner stays up before hiding itself.
+ * How long the "Delivered" or "Cancelled" banner stays up before hiding itself automatically.
  */
-const DELIVERED_AUTO_HIDE_MS = 60_000;
+const DELIVERED_AUTO_HIDE_MS = 3_500;
 
 /** When we first saw each order as completed/cancelled, so a page reload can't reset the clock. */
 const FIRST_SEEN_KEY = 'brokole-delivered-first-seen';

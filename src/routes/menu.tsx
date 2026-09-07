@@ -114,32 +114,12 @@ function MenuPage() {
         </div>
       </div>
 
-      {/* Control Bar: Search, Category Tabs, Sorting, View Modes */}
-      <div className="space-y-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-4 shadow-xs carved-box">
-        {/* Search & Sort Row */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* Search Input */}
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-light)]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search dishes or ingredients..."
-              className="w-full pl-10 pr-4 py-2.5 bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-2xl text-xs sm:text-sm text-[var(--color-text-main)] placeholder-[var(--color-text-light)] focus:outline-none focus:border-[var(--color-primary)] transition-all"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          {/* Right controls: Sorting & View Mode */}
-          <div className="flex items-center justify-between w-full sm:w-auto gap-3">
+      {/* Control Bar: Sorting, View Modes, Macro Filters & Category Tabs */}
+      <div className="space-y-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-4 shadow-xs carved-box">
+        {/* Top Control Row: Sort, View Modes & Macro Filters */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* Controls: Sorting & View Mode */}
+          <div className="flex items-center gap-3 shrink-0">
             {/* Sort Dropdown */}
             <div className="flex items-center gap-2 bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-2xl px-3 py-2 text-xs font-bold text-[var(--color-text-main)]">
               <ArrowUpDown className="w-4 h-4 text-[var(--color-primary)]" />
@@ -182,10 +162,56 @@ function MenuPage() {
               </button>
             </div>
           </div>
+
+          {/* Quick Macro Filter Badges (Moved to top row) */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-muted)] font-bold flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+              Macro Filters:
+            </span>
+
+            <button
+              onClick={() => setHighProteinOnly(!highProteinOnly)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                highProteinOnly
+                  ? 'bg-amber-500/10 border-amber-500 text-amber-600 font-extrabold'
+                  : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-amber-400'
+              }`}
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-500" />
+              <span>High Protein (&gt;30g)</span>
+            </button>
+
+            <button
+              onClick={() => setLowCalOnly(!lowCalOnly)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                lowCalOnly
+                  ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 font-extrabold'
+                  : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-emerald-400'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Low Calorie (&lt;400 kcal)</span>
+            </button>
+
+            {(highProteinOnly || lowCalOnly || selectedCategory !== 'All' || searchQuery) && (
+              <button
+                onClick={() => {
+                  setHighProteinOnly(false);
+                  setLowCalOnly(false);
+                  setSelectedCategory('All');
+                  setSearchQuery('');
+                }}
+                className="text-xs font-bold text-[var(--color-primary)] hover:underline ml-auto"
+              >
+                Reset Filters
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Category Pills Strip */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2 pb-1 border-t border-[var(--color-border-subtle)]">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2 border-t border-[var(--color-border-subtle)]">
           {CATEGORIES.map((cat) => {
             const Icon = cat.icon;
             const isSelected = selectedCategory === cat.id;
@@ -208,52 +234,6 @@ function MenuPage() {
               </button>
             );
           })}
-        </div>
-
-        {/* Quick Filter Badges */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-          <span className="text-[var(--color-text-muted)] font-bold flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5 text-[var(--color-primary)]" />
-            Macro Filters:
-          </span>
-
-          <button
-            onClick={() => setHighProteinOnly(!highProteinOnly)}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              highProteinOnly
-                ? 'bg-amber-500/10 border-amber-500 text-amber-600 font-extrabold'
-                : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-amber-400'
-            }`}
-          >
-            <Flame className="w-3.5 h-3.5 text-amber-500" />
-            <span>High Protein (&gt;30g)</span>
-          </button>
-
-          <button
-            onClick={() => setLowCalOnly(!lowCalOnly)}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              lowCalOnly
-                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 font-extrabold'
-                : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-emerald-400'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Low Calorie (&lt;400 kcal)</span>
-          </button>
-
-          {(highProteinOnly || lowCalOnly || selectedCategory !== 'All' || searchQuery) && (
-            <button
-              onClick={() => {
-                setHighProteinOnly(false);
-                setLowCalOnly(false);
-                setSelectedCategory('All');
-                setSearchQuery('');
-              }}
-              className="text-xs font-bold text-[var(--color-primary)] hover:underline ml-auto"
-            >
-              Reset Filters
-            </button>
-          )}
         </div>
       </div>
 

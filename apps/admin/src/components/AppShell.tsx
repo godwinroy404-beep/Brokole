@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ClipboardList, UtensilsCrossed, LogOut, ShieldCheck, CalendarRange, Boxes, Users, BarChart3 } from 'lucide-react';
+import { ClipboardList, UtensilsCrossed, LogOut, ShieldCheck, CalendarRange, Boxes, Users, BarChart3, ChefHat } from 'lucide-react';
 import { ROLE_LABELS } from '@brokole/domain';
 import type { AdminSession } from '../lib/useSession';
 import { OrdersScreen } from '../screens/OrdersScreen';
@@ -8,8 +8,9 @@ import { SubscriptionsScreen } from '../screens/SubscriptionsScreen';
 import { InventoryScreen } from '../screens/InventoryScreen';
 import { CustomersScreen } from '../screens/CustomersScreen';
 import { SalesReportScreen } from '../screens/SalesReportScreen';
+import { PowerBowlScreen } from '../screens/PowerBowlScreen';
 
-type Tab = 'orders' | 'subscriptions' | 'inventory' | 'customers' | 'menu' | 'sales';
+type Tab = 'orders' | 'subscriptions' | 'power-bowl' | 'inventory' | 'customers' | 'menu' | 'sales';
 
 export function AppShell({ session }: { session: AdminSession }) {
   const [tab, setTab] = useState<Tab>('orders');
@@ -18,6 +19,7 @@ export function AppShell({ session }: { session: AdminSession }) {
   const tabs: Array<{ id: Tab; label: string; icon: typeof ClipboardList; visible: boolean }> = [
     { id: 'orders', label: 'Orders', icon: ClipboardList, visible: true },
     { id: 'subscriptions', label: 'Subscriptions', icon: CalendarRange, visible: true },
+    { id: 'power-bowl', label: 'Customize Power Bowl', icon: ChefHat, visible: true },
     { id: 'inventory', label: 'Inventory', icon: Boxes, visible: true },
     { id: 'customers', label: 'Customers', icon: Users, visible: true },
     { id: 'menu', label: 'Menu', icon: UtensilsCrossed, visible: true },
@@ -71,6 +73,7 @@ export function AppShell({ session }: { session: AdminSession }) {
         )}
         {tab === 'orders' && <OrdersScreen session={session} />}
         {tab === 'subscriptions' && <SubscriptionsScreen session={session} />}
+        {tab === 'power-bowl' && <PowerBowlScreen session={session} />}
         {tab === 'inventory'     && <InventoryScreen     session={session} />}
         {tab === 'customers'     && <CustomersScreen     session={session} />}
         {tab === 'menu'   && <MenuScreen   session={session} />}
