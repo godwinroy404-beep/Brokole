@@ -5,12 +5,17 @@ import { isStaffRole, type AppRole } from '@brokole/domain';
 import { api, setToken, isApiConfigured } from '../lib/api';
 
 export function LoginScreen({ onSignedIn }: { onSignedIn: () => void | Promise<void> }) {
-  const [email, setEmail] = useState('admin@brokole.com');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function handleLogin(targetEmail: string, targetPass: string) {
     const cleanEmail = targetEmail.trim().toLowerCase();
+    if (!cleanEmail || !targetPass) {
+      toast.error('Enter your work email and password');
+      return;
+    }
+
     setBusy(true);
 
     try {
@@ -41,7 +46,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void | Promise<v
 
       // Fallback to local / preview admin session
       setToken('demo-admin-token');
-      toast.success(`Signed in as ${cleanEmail || 'Head Operations Admin'}`, {
+      toast.success(`Signed in as ${cleanEmail}`, {
         description: 'Operations console ready',
         duration: 4000,
       });
@@ -58,7 +63,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void | Promise<v
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    await handleLogin(email || 'admin@brokole.com', password || 'admin123');
+    await handleLogin(email, password);
   }
 
   return (

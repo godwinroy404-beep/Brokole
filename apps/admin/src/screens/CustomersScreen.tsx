@@ -98,8 +98,17 @@ function getFallbackCustomers(): CustomerProfile[] {
   ];
 }
 
+import { fetchCloudOrders } from '../../../../src/lib/cloudOrderSync';
+
 async function fetchAllLocalAndDiskOrders(): Promise<any[]> {
   const allOrders: any[] = [];
+
+  try {
+    const cloud = await fetchCloudOrders();
+    if (Array.isArray(cloud)) {
+      allOrders.push(...cloud);
+    }
+  } catch { /* ignore */ }
 
   try {
     const raw = localStorage.getItem('brokole-orders-storage');

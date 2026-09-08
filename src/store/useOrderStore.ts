@@ -4,6 +4,7 @@ import { fetchMyOrders, cancelOrderApi } from '../lib/menu';
 import { isApiConfigured } from '../lib/api';
 import { useAuthStore } from './useAuthStore';
 import { pushLocalOrderSync, fetchLocalSyncOrders } from '../lib/localSync';
+import { pushCloudOrder, updateCloudOrderStatus, fetchCloudOrders } from '../lib/cloudOrderSync';
 
 export type OrderStatus =
   | 'New Order'
@@ -147,6 +148,7 @@ export const useOrderStore = create<OrderState>()(
         }));
 
         void pushLocalOrderSync(newOrder);
+        void pushCloudOrder(newOrder);
 
         return newOrder;
       },
@@ -170,6 +172,9 @@ export const useOrderStore = create<OrderState>()(
         const target = get().orders.find((o) => o.id === orderId || o.serverId === orderId);
         if (target) {
           void pushLocalOrderSync({ ...target, status });
+          void updateCloudOrderStatus(orderId, status);
+        } else {
+          void updateCloudOrderStatus(orderId, status);
         }
 
         if (isApiConfigured) {

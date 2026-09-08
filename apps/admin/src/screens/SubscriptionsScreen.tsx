@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { formatINR, ORDER_STATUS_LABELS, type Order, type OrderStatus } from '@brokole/domain';
 import { api, isApiConfigured } from '../lib/api';
 import type { AdminSession } from '../lib/useSession';
+import { fetchCloudOrders, updateCloudOrderStatus } from '../../../../src/lib/cloudOrderSync';
 
 const STATUS_STYLES: Partial<Record<OrderStatus, string>> = {
   placed: 'bg-amber-100 text-amber-900 border-amber-300',
@@ -420,6 +421,55 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       }
     }
 
+    let cloudOrders: Order[] = [];
+    try {
+      const cloudData = await fetchCloudOrders();
+      if (Array.isArray(cloudData)) {
+        cloudOrders = cloudData
+          .filter((o) => !o.deleted)
+          .map((o) => {
+            let st = (o.status || '').toLowerCase();
+            if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
+            else if (st === 'accepted') st = 'accepted';
+            else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
+            else if (st === 'packed') st = 'packed';
+            else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
+            else if (st === 'delivered') st = 'delivered';
+            else if (st === 'cancelled' || st === 'canceled' || st === 'refunded') st = 'cancelled';
+            else st = 'placed';
+
+            const itemsSummary = o.itemsSummary || o.notes || 'Meal Plan';
+
+            return {
+              id: o.serverId || o.id,
+              order_no: o.order_no || o.id || 'BKL-SUB-001',
+              status: st as OrderStatus,
+              channel: o.channel || (itemsSummary.toLowerCase().includes('plan') || itemsSummary.toLowerCase().includes('sub') || itemsSummary.toLowerCase().includes('weekly') || itemsSummary.toLowerCase().includes('shred') ? 'subscription' : 'online'),
+              business_date: new Date(o.createdAt || o.created_at || Date.now()).toISOString().split('T')[0],
+              subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : 1800,
+              tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : 90,
+              delivery_fee: 0,
+              total: o.totalAmount || 1899,
+              total_calories: o.calories || 600,
+              total_protein: o.proteinGrams || 50,
+              customer_id: o.userId || 'usr-demo',
+              placed_at: o.createdAt || o.created_at || new Date().toISOString(),
+              created_at: o.createdAt || o.created_at || new Date().toISOString(),
+              notes: o.notes || itemsSummary,
+              lines: (o.itemsList || o.lines || []).map((item: any) => ({
+                name_snapshot: item.title || item.name_snapshot || 'Goal Meal Plan',
+                quantity: item.quantity || 1,
+                unit_price: String(item.price || item.unit_price || 0),
+                line_total: String((item.price || item.unit_price || 0) * (item.quantity || 1)),
+              })),
+              customer_name: o.customerName || o.customer_name || 'Customer',
+              phone: o.customerPhone || '+91 98765 43210',
+              skipped_days: [],
+            } as any;
+          });
+      }
+    } catch {}
+
     const diskOrders = await fetchDiskOrders();
     const localStoreOrders = getLocalStorageOrders();
 
@@ -437,6 +487,10 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
     for (const o of diskOrders) {
       orderMap.set(o.id || o.order_no, o);
     }
+    // Cloud sync (high priority across all devices)
+    for (const o of cloudOrders) {
+      orderMap.set(o.id || o.order_no, o);
+    }
     // API orders (highest priority)
     for (const o of apiOrders) {
       orderMap.set(o.id || o.order_no, o);
@@ -448,6 +502,15 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
 
   useEffect(() => {
     void fetchOrders();
+  }, [fetchOrders]);
+
+  // Real-time live polling every 3 seconds for subscriptions across all devices
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') void fetchOrders();
+    };
+    const interval = window.setInterval(tick, 3000);
+    return () => window.clearInterval(interval);
   }, [fetchOrders]);
 
   useEffect(() => {

@@ -17,12 +17,12 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   const location = useLocation();
-  const isAdmin = location.pathname.startsWith('/admin');
+  const isOpsConsole = location.pathname.startsWith('/ops-console');
 
   useCartSync();
   useAppBootstrap();
 
-  if (isAdmin) {
+  if (isOpsConsole) {
     return (
       <div className="min-h-screen bg-neutral-50 text-neutral-900 flex flex-col antialiased">
         {/* Sonner Toast Notifications */}

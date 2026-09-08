@@ -1,5 +1,22 @@
 [
   {
+    "id": "ORD-5234",
+    "userId": "usr-1788861239344",
+    "userEmail": "admin@brokole.com",
+    "customerName": "Laborum Sequi omnis",
+    "customerPhone": "+1 (749) 295-8994",
+    "customerAddress": "Ut qui amet tempori",
+    "itemsSummary": "Grilled Chicken & Brown Rice x1",
+    "itemsList": [],
+    "totalAmount": 218,
+    "proteinGrams": 38,
+    "calories": 520,
+    "status": "New Order",
+    "createdAt": "2026-09-08T09:57:15.455Z",
+    "timeFormatted": "Just now",
+    "isNew": true
+  },
+  {
     "id": "ORD-4608",
     "userId": "1291004a-46eb-4172-b8ab-bf9211c9de88",
     "userEmail": "godwin@gmail.com",

@@ -2,17 +2,18 @@ import React from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import AdminApp from '../../apps/admin/src/App';
 
-export const Route = createFileRoute('/admin')({
+export const Route = createFileRoute('/ops-console')({
   head: () => ({
     meta: [
-      { title: 'Brokole Operations & Admin Console' },
-      { name: 'description', content: 'Brokole Operations, Kitchen Orders, Subscriptions & Administration Portal.' },
+      { title: 'Brokole Operations & Staff Console' },
+      { name: 'description', content: 'Restricted Staff & Kitchen Operations Portal.' },
+      { name: 'robots', content: 'noindex, nofollow' },
     ],
   }),
-  component: AdminPage,
+  component: OpsConsolePage,
 });
 
-function AdminPage() {
+function OpsConsolePage() {
   return (
     <div className="min-h-screen flex flex-col bg-neutral-50 text-neutral-900 antialiased">
       <AdminApp />

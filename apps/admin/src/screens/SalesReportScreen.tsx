@@ -32,6 +32,17 @@ export function SalesReportScreen({ session }: { session: AdminSession }) {
       }
     }
 
+    // 1.5 Try Cloud Sync (All devices)
+    try {
+      const { fetchCloudOrders } = await import('../../../../src/lib/cloudOrderSync');
+      const cloudOrders = await fetchCloudOrders();
+      if (Array.isArray(cloudOrders) && cloudOrders.length > 0) {
+        combined.push(...cloudOrders);
+      }
+    } catch {
+      /* ignore */
+    }
+
     // 2. Try LocalStorage
     try {
       const raw = localStorage.getItem('brokole-orders-storage');
