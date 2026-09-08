@@ -222,4 +222,24 @@
   animation: pillAttentionWiggle 0.75s ease-in-out;
 }
 
+/* Position Toast Alert Close Button on the Right Side */
+[data-sonner-toast] [data-close-button] {
+  left: auto !important;
+  right: 0 !important;
+  transform: translate(35%, -35%) !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  background: #ffffff !important;
+  color: #64748b !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  cursor: pointer !important;
+  border-radius: 9999px !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  transform: translate(35%, -35%) scale(1.08) !important;
+}
+
 

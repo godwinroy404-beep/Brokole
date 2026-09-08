@@ -632,8 +632,17 @@ export const OrderStatusBanner: React.FC = () => {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white border border-neutral-200 rounded-3xl p-6 shadow-2xl space-y-4 animate-scale-in text-center cursor-default"
+            className="w-full max-w-sm bg-white border border-neutral-200 rounded-3xl p-6 shadow-2xl space-y-4 animate-scale-in text-center cursor-default relative"
           >
+            <button
+              type="button"
+              onClick={() => setShowCancelConfirmModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition cursor-pointer"
+              aria-label="Close modal"
+            >
+              <X className="size-4" />
+            </button>
+
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
               <AlertTriangle className="size-6 text-rose-600" />
             </div>
