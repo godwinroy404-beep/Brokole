@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useOrderStore } from '../store/useOrderStore';
 import { placeOrder, fetchDefaultOutletId, ensureAddress } from '../lib/menu';
 import { isApiConfigured } from '../lib/api';
+import { pushCloudOrder } from '../lib/cloudOrderSync';
 import { useCustomerStore } from '../store/useCustomerStore';
 import { formatCurrency } from '../lib/nutritionParser';
 import { toast } from 'sonner';
@@ -141,6 +142,7 @@ export const CartDrawer: React.FC = () => {
           const freshOrders = useOrderStore.getState().orders;
           if (freshOrders.length > 0) {
             useOrderStore.setState({ latestPlacedOrder: { ...freshOrders[0], isNew: true } });
+            void pushCloudOrder(freshOrders[0]);
           }
 
           toast.success('Order placed!', {
