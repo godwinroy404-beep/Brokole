@@ -78,6 +78,27 @@ export function normalizeCloudOrder(o: any): CloudOrderPayload {
  * Fetches all orders from the global cloud sync store with strict cache-busting.
  */
 export async function fetchCloudOrders(): Promise<CloudOrderPayload[]> {
+  // 1. First attempt to fetch from native serverless / local sync endpoint
+  try {
+    const res = await fetch(`/api/local-orders-sync?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.orders) && data.orders.length > 0) {
+        memoryOrdersCache = data.orders.map(normalizeCloudOrder);
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('brokole-cloud-orders-cache', JSON.stringify(memoryOrdersCache));
+          }
+        } catch {}
+        return memoryOrdersCache;
+      }
+    }
+  } catch {}
+
+  // 2. Secondary attempt to fetch from global cloud bin
   try {
     const url = `${CLOUD_ORDERS_BIN}?_t=${Date.now()}`;
     const res = await fetch(url, {
@@ -97,7 +118,7 @@ export async function fetchCloudOrders(): Promise<CloudOrderPayload[]> {
         data = {};
       }
 
-      if (Array.isArray(data?.orders)) {
+      if (Array.isArray(data?.orders) && data.orders.length > 0) {
         memoryOrdersCache = data.orders.map(normalizeCloudOrder);
         try {
           if (typeof localStorage !== 'undefined') {
@@ -111,7 +132,7 @@ export async function fetchCloudOrders(): Promise<CloudOrderPayload[]> {
     console.warn('Cloud sync fetch error:', err);
   }
 
-  // Fallback to local cache if offline
+  // 3. Fallback to local cache if offline
   try {
     if (typeof localStorage !== 'undefined') {
       const cached = localStorage.getItem('brokole-cloud-orders-cache');
@@ -157,9 +178,9 @@ export async function pushCloudOrder(order: any): Promise<void> {
     }
   } catch {}
 
-  // Also push to local dev server endpoint if running on localhost
+  // Push to native serverless / local sync endpoint (Vercel & Localhost)
   try {
-    fetch('/api/local-orders-sync', {
+    await fetch('/api/local-orders-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order: norm }),
@@ -273,6 +294,14 @@ export async function updateCloudOrderStatus(orderId: string, newStatus: string)
   memoryOrdersCache = finalOrders;
 
   try {
+    await fetch('/api/local-orders-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, status: newStatus }),
+    }).catch(() => {});
+  } catch {}
+
+  try {
     await fetch(CLOUD_ORDERS_BIN, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -327,6 +356,14 @@ export async function clearAllCloudOrders(): Promise<void> {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('brokole-cloud-orders-cache');
     }
+  } catch {}
+
+  try {
+    await fetch('/api/local-orders-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear_all' }),
+    }).catch(() => {});
   } catch {}
 
   try {
