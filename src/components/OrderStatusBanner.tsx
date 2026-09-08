@@ -57,9 +57,14 @@ export const OrderStatusBanner: React.FC = () => {
   const { latestPlacedOrder, orders, clearLatestPlacedOrder } = useOrderStore();
   const { user } = useAuthStore();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isMinimizing, setIsMinimizing] = useState(false);
+  const [pillJustWiggled, setPillJustWiggled] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(
     () => new Set(Object.keys(readJson(DISMISSED_KEY))),
   );
+
+  const userMinimizedRef = React.useRef<Set<string>>(new Set());
+  const expandedOrdersRef = React.useRef<Set<string>>(new Set());
 
   const dismissOrder = useCallback((orderId: string) => {
     setDismissedIds((prev) => {
@@ -71,6 +76,7 @@ export const OrderStatusBanner: React.FC = () => {
     });
     clearLatestPlacedOrder();
     setIsExpanded(false);
+    setIsMinimizing(false);
   }, [clearLatestPlacedOrder]);
 
   const [isCancelling, setIsCancelling] = useState(false);
@@ -142,10 +148,24 @@ export const OrderStatusBanner: React.FC = () => {
     return lastDone ?? null;
   }, [orders, latestPlacedOrder, user, dismissedIds]);
 
-  // Expand automatically when a fresh new order is placed
+  // Expand smoothly with a gentle delay when a fresh new order is first placed
   useEffect(() => {
-    if (latestPlacedOrder && latestPlacedOrder.isNew) {
-      setIsExpanded(true);
+    if (latestPlacedOrder?.id && latestPlacedOrder.isNew) {
+      if (!expandedOrdersRef.current.has(latestPlacedOrder.id) && !userMinimizedRef.current.has(latestPlacedOrder.id)) {
+        expandedOrdersRef.current.add(latestPlacedOrder.id);
+        // Clear isNew flag to avoid re-triggering
+        useOrderStore.setState((state) => ({
+          latestPlacedOrder: state.latestPlacedOrder ? { ...state.latestPlacedOrder, isNew: false } : null,
+        }));
+
+        const timer = setTimeout(() => {
+          if (!userMinimizedRef.current.has(latestPlacedOrder.id)) {
+            setIsExpanded(true);
+          }
+        }, 750);
+
+        return () => clearTimeout(timer);
+      }
     }
   }, [latestPlacedOrder]);
 
@@ -175,28 +195,24 @@ export const OrderStatusBanner: React.FC = () => {
     return () => clearTimeout(timer);
   }, [activeOrderId, activeDone, dismissedIds, dismissOrder]);
 
-  // Fast 4-second live polling for order status changes from kitchen console
-  useEffect(() => {
-    if (!activeOrderId || !isApiConfigured) return;
-    const loadMyOrders = useOrderStore.getState().loadMyOrders;
-
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void loadMyOrders();
-      }
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [activeOrderId]);
-
   // HIDE IF NO ORDER PLACED or on kitchen admin page
   if (pathname.startsWith('/kitchen') || !activeOrder || dismissedIds.has(activeOrder.id)) {
     return null;
   }
 
-  const handleDismiss = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsExpanded(false);
+  const handleMinimize = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (activeOrder?.id) {
+      userMinimizedRef.current.add(activeOrder.id);
+    }
+    setShowDropdown(false);
+    setIsMinimizing(true);
+    setTimeout(() => {
+      setIsExpanded(false);
+      setIsMinimizing(false);
+      setPillJustWiggled(true);
+      setTimeout(() => setPillJustWiggled(false), 2400);
+    }, 270);
   };
 
   const getStatusDetails = (status: OrderStatus | string) => {
@@ -276,7 +292,7 @@ export const OrderStatusBanner: React.FC = () => {
     setIsCancelling(false);
     if (res.ok) {
       toast.success(`Order #${activeOrder.id} cancelled successfully`);
-      setIsExpanded(false);
+      handleMinimize();
     } else {
       toast.error(res.error || 'Could not cancel order');
     }
@@ -285,10 +301,26 @@ export const OrderStatusBanner: React.FC = () => {
   return (
     <>
       {/* Floating Status Button (Fixed at Bottom Right) */}
-      <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 animate-bounce-subtle">
+      <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 flex flex-col items-end pointer-events-none">
+        {pillJustWiggled && (
+          <div className="animate-fade-in bg-neutral-900 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-2xl flex items-center gap-1.5 mb-2 border border-emerald-500/40 pointer-events-auto">
+            <span className="size-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>🎯 Tracker minimized here · Tap anytime!</span>
+          </div>
+        )}
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-3 bg-white/95 text-neutral-900 pl-3.5 pr-4 py-2.5 rounded-full shadow-xl border border-neutral-200/90 backdrop-blur-md hover:bg-neutral-50 hover:border-neutral-300 transition-all transform hover:scale-[1.03] active:scale-[0.98] cursor-pointer group"
+          onClick={() => {
+            if (isExpanded) {
+              handleMinimize();
+            } else {
+              setIsExpanded(true);
+            }
+          }}
+          className={`pointer-events-auto flex items-center gap-3 bg-white text-neutral-900 pl-3.5 pr-4 py-2.5 rounded-full shadow-2xl border-2 transition-all transform active:scale-95 cursor-pointer group ${
+            pillJustWiggled
+              ? 'animate-pill-wiggle border-emerald-500 ring-4 ring-emerald-200/80 scale-105 shadow-emerald-500/20'
+              : 'border-neutral-200/90 hover:border-neutral-300 hover:scale-[1.03]'
+          }`}
         >
           {/* Pulsing Status Dot */}
           <span className="relative flex size-3 shrink-0">
@@ -327,15 +359,19 @@ export const OrderStatusBanner: React.FC = () => {
         </button>
       </div>
 
-      {/* Expanded Order Tracking Modal / Sheet */}
-      {isExpanded && (
+      {/* Expanded Order Tracking Modal / Sheet with Jelly Whoosh Transition */}
+      {(isExpanded || isMinimizing) && (
         <div
-          onClick={() => { setIsExpanded(false); setShowDropdown(false); }}
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in cursor-pointer"
+          onClick={handleMinimize}
+          className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 backdrop-blur-xs transition-opacity duration-300 cursor-pointer ${
+            isMinimizing ? 'opacity-0' : 'opacity-100 animate-fade-in'
+          }`}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white border border-neutral-200 rounded-3xl p-5 shadow-2xl space-y-4 animate-slide-up cursor-default"
+            className={`w-full max-w-md bg-white border border-neutral-200 rounded-3xl p-5 shadow-2xl space-y-4 cursor-default ${
+              isMinimizing ? 'animate-jelly-minimize' : 'animate-jelly-expand'
+            }`}
           >
             {/* Header */}
             <div className="flex items-start justify-between border-b border-neutral-100 pb-3">
@@ -387,7 +423,7 @@ export const OrderStatusBanner: React.FC = () => {
                 )}
 
                 <button
-                  onClick={handleDismiss}
+                  onClick={handleMinimize}
                   className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition cursor-pointer"
                   title="Close Tracker Popup"
                 >
@@ -532,7 +568,7 @@ export const OrderStatusBanner: React.FC = () => {
                   if (statusInfo.step === 0 || statusInfo.step === 4) {
                     dismissOrder(activeOrder.id);
                   } else {
-                    setIsExpanded(false);
+                    handleMinimize();
                   }
                 }}
                 className="w-full py-3 rounded-xl bg-neutral-900 text-white font-bold text-xs hover:bg-neutral-800 transition text-center shadow-xs cursor-pointer"

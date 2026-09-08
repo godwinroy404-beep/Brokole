@@ -19,11 +19,13 @@ export function useAppBootstrap() {
   const loadProducts = useProductStore((s) => s.loadProducts);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/ops-console')) return;
     void initialize();
     void loadProducts();
   }, [initialize, loadProducts]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/ops-console')) return;
     const { loadMyOrders, subscribeToMyOrders } = useOrderStore.getState();
     void loadMyOrders();
     const unsubscribe = subscribeToMyOrders();

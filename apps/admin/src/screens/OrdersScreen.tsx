@@ -1,13 +1,13 @@
-import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, ArrowRight, Loader2 } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { RefreshCw, ArrowRight, Loader2, CheckCircle2, Bike, Utensils } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  formatINR, nextStatus, ORDER_STATUS_LABELS,
+  formatINR, nextStatus, ORDER_STATUS_LABELS, ORDER_ACTION_LABELS,
   type Order, type OrderStatus,
+  fetchCloudOrders, updateCloudOrderStatus,
 } from '@brokole/domain';
 import { api, isApiConfigured } from '../lib/api';
 import type { AdminSession } from '../lib/useSession';
-import { fetchCloudOrders, updateCloudOrderStatus } from '../../../../src/lib/cloudOrderSync';
 
 const STATUS_STYLES: Partial<Record<OrderStatus, string>> = {
   placed:           'bg-amber-100 text-amber-800',
@@ -19,6 +19,62 @@ const STATUS_STYLES: Partial<Record<OrderStatus, string>> = {
   delivered:        'bg-emerald-100 text-emerald-800',
   cancelled:        'bg-neutral-200 text-neutral-600',
   refunded:         'bg-rose-100 text-rose-800',
+};
+
+const ACTION_BUTTON_CONFIG: Partial<
+  Record<
+    OrderStatus,
+    {
+      bg: string;
+      hover: string;
+      text: string;
+      label: string;
+      Icon: React.ComponentType<{ className?: string }>;
+    }
+  >
+> = {
+  placed: {
+    bg: 'bg-amber-600',
+    hover: 'hover:bg-amber-500',
+    text: 'text-white',
+    label: 'Accept & Start Cooking 🍳',
+    Icon: Utensils,
+  },
+  paid: {
+    bg: 'bg-amber-600',
+    hover: 'hover:bg-amber-500',
+    text: 'text-white',
+    label: 'Accept & Start Cooking 🍳',
+    Icon: Utensils,
+  },
+  accepted: {
+    bg: 'bg-amber-600',
+    hover: 'hover:bg-amber-500',
+    text: 'text-white',
+    label: 'Start Cooking 🍳',
+    Icon: Utensils,
+  },
+  in_kitchen: {
+    bg: 'bg-indigo-600',
+    hover: 'hover:bg-indigo-500',
+    text: 'text-white',
+    label: 'Hand to Rider (Out for Delivery) 🛵',
+    Icon: Bike,
+  },
+  packed: {
+    bg: 'bg-indigo-600',
+    hover: 'hover:bg-indigo-500',
+    text: 'text-white',
+    label: 'Hand to Rider (Out for Delivery) 🛵',
+    Icon: Bike,
+  },
+  out_for_delivery: {
+    bg: 'bg-emerald-700',
+    hover: 'hover:bg-emerald-600',
+    text: 'text-white',
+    label: 'Confirm Delivered ✅',
+    Icon: CheckCircle2,
+  },
 };
 
 async function fetchDiskOrders(): Promise<Order[]> {
@@ -157,82 +213,201 @@ function getFallbackOrders(): Order[] {
   ];
 }
 
+interface OrderCardProps {
+  order: Order;
+  session: AdminSession;
+  working: string | null;
+  onAdvance: (order: Order) => void;
+}
+
+const OrderCard = React.memo(function OrderCard({ order, session, working, onAdvance }: OrderCardProps) {
+  const to = nextStatus(order.status);
+  const hasTaxOrDelivery = Number(order.tax_amount) > 0 || Number(order.delivery_fee) > 0;
+
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs hover:shadow-xs transition-all space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="font-mono text-sm font-black text-neutral-900 tracking-tight">{order.order_no}</div>
+          <div className="text-[11px] text-neutral-500 font-semibold">{order.business_date}</div>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-black shadow-2xs ${STATUS_STYLES[order.status] ?? 'bg-neutral-100 text-neutral-700'}`}>
+          {ORDER_STATUS_LABELS[order.status]}
+        </span>
+      </div>
+
+      <div className="flex items-baseline justify-between pt-1 border-t border-neutral-100">
+        <span className="text-xl font-black text-neutral-900">{formatINR(order.total)}</span>
+        <span className="text-xs text-neutral-500 font-bold">
+          {Math.round(Number(order.total_protein))}g protein · {Math.round(Number(order.total_calories))} kcal
+        </span>
+      </div>
+
+      {hasTaxOrDelivery && (
+        <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium bg-neutral-50/80 px-2.5 py-1.5 rounded-lg border border-neutral-100">
+          <span>Sub: <strong className="text-neutral-800 font-bold">{formatINR(order.subtotal)}</strong></span>
+          {Number(order.tax_amount) > 0 && (
+            <span>GST (5%): <strong className="text-neutral-800 font-bold">{formatINR(order.tax_amount)}</strong></span>
+          )}
+          <span>Delivery: <strong className="text-neutral-800 font-bold">{Number(order.delivery_fee) > 0 ? formatINR(order.delivery_fee) : 'FREE'}</strong></span>
+        </div>
+      )}
+
+      {order.notes && (
+        <p className="text-xs text-neutral-700 bg-amber-50/80 border border-amber-200/60 p-2.5 rounded-xl">
+          <span className="font-extrabold text-amber-900">Note:</span> {order.notes}
+        </p>
+      )}
+
+      {/* Items & Custom Selected Ingredients Breakdown */}
+      {order.lines && order.lines.length > 0 && (
+        <div className="space-y-2 border-t border-neutral-100 pt-2.5">
+          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block">
+            Ordered Items & Ingredients
+          </span>
+          {order.lines.map((line, idx) => (
+            <div key={idx} className="rounded-xl bg-neutral-50 p-3 text-xs text-neutral-800 border border-neutral-200/70 space-y-1">
+              <div className="flex items-center justify-between font-extrabold text-neutral-900">
+                <span>{line.quantity}x {line.name_snapshot}</span>
+                <span className="font-black text-neutral-900">{formatINR(line.line_total || (Number(line.unit_price) * line.quantity))}</span>
+              </div>
+              {line.notes && (
+                <div className="mt-1.5 text-[11px] text-emerald-950 bg-emerald-50/90 p-2 rounded-lg border border-emerald-200/80 font-medium leading-relaxed">
+                  <span className="font-extrabold text-emerald-900 block mb-0.5">🥗 Selected Custom Ingredients:</span>
+                  {line.notes}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {to && session.can('orders.update.status') && (() => {
+        const btnCfg = ACTION_BUTTON_CONFIG[order.status];
+        const BtnIcon = btnCfg?.Icon || ArrowRight;
+        const btnLabel = btnCfg?.label || `Mark ${ORDER_STATUS_LABELS[to]}`;
+        const btnBg = btnCfg?.bg || 'bg-emerald-700';
+        const btnHover = btnCfg?.hover || 'hover:bg-emerald-600';
+        const btnText = btnCfg?.text || 'text-white';
+
+        return (
+          <button
+            onClick={() => onAdvance(order)}
+            disabled={working === order.id}
+            className={`w-full flex items-center justify-center gap-2 rounded-xl ${btnBg} ${btnHover} active:scale-[0.99] px-4 py-2.5 text-xs font-black ${btnText} transition-all shadow-sm cursor-pointer disabled:opacity-60`}
+          >
+            {working === order.id ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <BtnIcon className="size-3.5" />
+            )}
+            <span>{btnLabel}</span>
+          </button>
+        );
+      })()}
+    </div>
+  );
+});
+
 export function OrdersScreen({ session }: { session: AdminSession }) {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>(() => getFallbackOrders());
+  const [isSyncing, setIsSyncing] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
 
-  const fetchOrders = useCallback(async () => {
-    let loaded: Order[] = [];
+  const fetchOrders = useCallback(async (isManual = false) => {
+    if (isManual) setIsSyncing(true);
+
+    const orderMap = new Map<string, Order>();
+
+    // 1. Fallback base orders first
+    for (const o of getFallbackOrders()) {
+      const key = String(o.id || o.order_no).toLowerCase();
+      orderMap.set(key, o);
+    }
+
+    // 2. Disk sync orders
+    const disk = await fetchDiskOrders();
+    for (const o of disk) {
+      const key = String(o.id || o.order_no).toLowerCase();
+      orderMap.set(key, o);
+    }
+
+    // 3. Global cloud orders (high priority cross-device sync)
+    try {
+      const cloudData = await fetchCloudOrders();
+      if (Array.isArray(cloudData) && cloudData.length > 0) {
+        cloudData
+          .filter((o) => !o.deleted)
+          .forEach((o) => {
+            let st = (o.status || '').toLowerCase();
+            if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
+            else if (st === 'accepted') st = 'accepted';
+            else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
+            else if (st === 'packed') st = 'packed';
+            else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
+            else if (st === 'delivered') st = 'delivered';
+            else if (st === 'cancelled' || st === 'canceled' || st === 'refunded') st = 'cancelled';
+            else st = 'placed';
+
+            const id = o.serverId || o.id;
+            const order_no = o.order_no || o.id || 'BKL-DEMO-001';
+            const key = String(id || order_no).toLowerCase();
+
+            orderMap.set(key, {
+              id,
+              order_no,
+              status: st as OrderStatus,
+              business_date: new Date(o.createdAt || Date.now()).toISOString().split('T')[0],
+              subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : 380,
+              tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : 19,
+              delivery_fee: 0,
+              total: o.totalAmount || 399,
+              total_calories: o.calories || 550,
+              total_protein: o.proteinGrams || 48,
+              customer_id: o.userId || 'usr-demo',
+              placed_at: o.createdAt || new Date().toISOString(),
+              created_at: o.createdAt || new Date().toISOString(),
+              notes: o.notes || `${o.customerName || 'Customer'} (${o.customerPhone || ''}) - ${o.itemsSummary || 'Fresh Healthy Meals'}`,
+              lines: (o.itemsList || []).map((item: any) => ({
+                name_snapshot: item.title || item.name_snapshot || 'Healthy Meal',
+                quantity: item.quantity || 1,
+                unit_price: String(item.price || item.unit_price || 0),
+                line_total: String((item.price || item.unit_price || 0) * (item.quantity || 1)),
+              })),
+            });
+          });
+      }
+    } catch {}
+
+    // 4. Server API orders (highest priority if configured)
     if (isApiConfigured) {
       try {
         const { orders: serverOrders } = await api.get<{ orders: Order[] }>('/orders');
-        if (serverOrders && serverOrders.length > 0) loaded = serverOrders;
-      } catch {
-        loaded = [];
-      }
-    }
-
-    if (loaded.length === 0) {
-      try {
-        const cloudData = await fetchCloudOrders();
-        if (Array.isArray(cloudData) && cloudData.length > 0) {
-          loaded = cloudData
-            .filter((o) => !o.deleted)
-            .map((o) => {
-              let st = (o.status || '').toLowerCase();
-              if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
-              else if (st === 'accepted') st = 'accepted';
-              else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
-              else if (st === 'packed') st = 'packed';
-              else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
-              else if (st === 'delivered') st = 'delivered';
-              else if (st === 'cancelled' || st === 'canceled' || st === 'refunded') st = 'cancelled';
-              else st = 'placed';
-
-              return {
-                id: o.serverId || o.id,
-                order_no: o.order_no || o.id || 'BKL-DEMO-001',
-                status: st as OrderStatus,
-                business_date: new Date(o.createdAt || Date.now()).toISOString().split('T')[0],
-                subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : 380,
-                tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : 19,
-                delivery_fee: 0,
-                total: o.totalAmount || 399,
-                total_calories: o.calories || 550,
-                total_protein: o.proteinGrams || 48,
-                customer_id: o.userId || 'usr-demo',
-                placed_at: o.createdAt || new Date().toISOString(),
-                created_at: o.createdAt || new Date().toISOString(),
-                notes: o.notes || `${o.customerName || 'Customer'} (${o.customerPhone || ''}) - ${o.itemsSummary || 'Fresh Healthy Meals'}`,
-                lines: (o.itemsList || []).map((item: any) => ({
-                  name_snapshot: item.title || item.name_snapshot || 'Healthy Meal',
-                  quantity: item.quantity || 1,
-                  unit_price: String(item.price || item.unit_price || 0),
-                  line_total: String((item.price || item.unit_price || 0) * (item.quantity || 1)),
-                })),
-              };
-            });
+        if (serverOrders && serverOrders.length > 0) {
+          for (const o of serverOrders) {
+            const key = String(o.id || o.order_no).toLowerCase();
+            orderMap.set(key, o);
+          }
         }
       } catch {}
     }
 
-    if (loaded.length === 0) {
-      const disk = await fetchDiskOrders();
-      if (disk.length > 0) loaded = disk;
-    }
+    const loaded = Array.from(orderMap.values()).sort(
+      (a, b) => new Date(b.placed_at || b.created_at || 0).getTime() - new Date(a.placed_at || a.created_at || 0).getTime()
+    );
 
-    if (loaded.length === 0) {
-      loaded = getFallbackOrders();
-    }
-
-    setOrders(loaded);
-    setLoading(false);
+    setOrders((prev) => {
+      const prevSig = prev.map((o) => `${o.id}:${o.status}:${o.total}`).join('|');
+      const nextSig = loaded.map((o) => `${o.id}:${o.status}:${o.total}`).join('|');
+      if (prevSig === nextSig) return prev;
+      return loaded;
+    });
+    if (isManual) setIsSyncing(false);
   }, []);
 
   useEffect(() => {
-    void fetchOrders();
+    void fetchOrders(false);
   }, [fetchOrders]);
 
   // Live real-time multi-device order sync with 2s polling and broadcast events
@@ -242,20 +417,20 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         bc = new BroadcastChannel('brokole-live-sync-channel');
         bc.onmessage = () => {
-          void fetchOrders();
+          void fetchOrders(false);
         };
       }
     } catch {}
 
     const handleCustom = () => {
-      void fetchOrders();
+      void fetchOrders(false);
     };
 
     window.addEventListener('bkl-orders-updated', handleCustom);
     window.addEventListener('storage', handleCustom);
 
     const tick = () => {
-      void fetchOrders();
+      void fetchOrders(false);
     };
     const interval = window.setInterval(tick, 2000);
     document.addEventListener('visibilitychange', tick);
@@ -303,10 +478,23 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
     );
 
     parsed.state.orders = updated;
+    if (parsed.state.latestPlacedOrder && (parsed.state.latestPlacedOrder.id === orderNoOrId || parsed.state.latestPlacedOrder.serverId === orderNoOrId)) {
+      parsed.state.latestPlacedOrder = { ...parsed.state.latestPlacedOrder, status: uiStatus, isNew: false };
+    }
     localStorage.setItem('brokole-orders-storage', JSON.stringify(parsed));
   } catch {
     /* ignore */
   }
+
+  try {
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const bc = new BroadcastChannel('brokole-live-sync-channel');
+      bc.postMessage({ type: 'order_status_updated', id: orderNoOrId, status: toDbStatus });
+      bc.close();
+    }
+  } catch {}
 }
 
   async function advance(order: Order) {
@@ -323,13 +511,25 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
     }
 
     updateLocalOrderStatus(order.order_no || order.id, to);
-    toast.success(`${order.order_no} → ${ORDER_STATUS_LABELS[to]}`);
-    await fetchOrders();
-    setWorking(null);
-  }
 
-  if (loading) {
-    return <div className="flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="size-4 animate-spin" /> Loading orders…</div>;
+    if (to === 'delivered') {
+      toast.success(`Order ${order.order_no} marked Delivered! 🎉`, {
+        description: 'Moved to completed orders & customer notified.',
+      });
+    } else if (to === 'out_for_delivery') {
+      toast.success(`Order ${order.order_no} handed to Rider 🛵`, {
+        description: 'Status updated to Out for Delivery.',
+      });
+    } else if (to === 'in_kitchen') {
+      toast.success(`Order ${order.order_no} cooking in kitchen 🍳`, {
+        description: 'Status updated to Preparing.',
+      });
+    } else {
+      toast.success(`${order.order_no} → ${ORDER_STATUS_LABELS[to]}`);
+    }
+
+    await fetchOrders(false);
+    setWorking(null);
   }
 
   const activeOrders = orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'refunded');
@@ -346,9 +546,13 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
               {activeOrders.length} Active
             </span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 text-[11px] font-medium">
+              <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Sync
+            </span>
           </h2>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Active orders currently in kitchen & dispatch queue. Delivered orders move to Order History automatically.
+            Auto-updating in background. Updates only the orders section without reloading the page.
           </p>
         </div>
 
@@ -376,10 +580,17 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
           </div>
 
           <button
-            onClick={() => void fetchOrders()}
-            className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 transition shadow-2xs cursor-pointer"
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              void fetchOrders(true);
+            }}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 transition shadow-2xs cursor-pointer disabled:opacity-75"
+            title="Refresh orders section"
           >
-            <RefreshCw className="size-3.5" /> Refresh
+            <RefreshCw className={`size-3.5 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
+            <span>{isSyncing ? 'Syncing…' : 'Refresh Orders'}</span>
           </button>
         </div>
       </div>
@@ -392,81 +603,15 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {displayedOrders.map((order) => {
-          const to = nextStatus(order.status);
-          const hasTaxOrDelivery = Number(order.tax_amount) > 0 || Number(order.delivery_fee) > 0;
-
-          return (
-            <div key={order.id} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs hover:shadow-xs transition-all space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-mono text-sm font-black text-neutral-900 tracking-tight">{order.order_no}</div>
-                  <div className="text-[11px] text-neutral-500 font-semibold">{order.business_date}</div>
-                </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-black shadow-2xs ${STATUS_STYLES[order.status] ?? 'bg-neutral-100 text-neutral-700'}`}>
-                  {ORDER_STATUS_LABELS[order.status]}
-                </span>
-              </div>
-
-              <div className="flex items-baseline justify-between pt-1 border-t border-neutral-100">
-                <span className="text-xl font-black text-neutral-900">{formatINR(order.total)}</span>
-                <span className="text-xs text-neutral-500 font-bold">
-                  {Math.round(Number(order.total_protein))}g protein · {Math.round(Number(order.total_calories))} kcal
-                </span>
-              </div>
-
-              {hasTaxOrDelivery && (
-                <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium bg-neutral-50/80 px-2.5 py-1.5 rounded-lg border border-neutral-100">
-                  <span>Sub: <strong className="text-neutral-800 font-bold">{formatINR(order.subtotal)}</strong></span>
-                  {Number(order.tax_amount) > 0 && (
-                    <span>GST (5%): <strong className="text-neutral-800 font-bold">{formatINR(order.tax_amount)}</strong></span>
-                  )}
-                  <span>Delivery: <strong className="text-neutral-800 font-bold">{Number(order.delivery_fee) > 0 ? formatINR(order.delivery_fee) : 'FREE'}</strong></span>
-                </div>
-              )}
-
-              {order.notes && (
-                <p className="text-xs text-neutral-700 bg-amber-50/80 border border-amber-200/60 p-2.5 rounded-xl">
-                  <span className="font-extrabold text-amber-900">Note:</span> {order.notes}
-                </p>
-              )}
-
-              {/* Items & Custom Selected Ingredients Breakdown */}
-              {order.lines && order.lines.length > 0 && (
-                <div className="space-y-2 border-t border-neutral-100 pt-2.5">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block">
-                    Ordered Items & Ingredients
-                  </span>
-                  {order.lines.map((line, idx) => (
-                    <div key={idx} className="rounded-xl bg-neutral-50 p-3 text-xs text-neutral-800 border border-neutral-200/70 space-y-1">
-                      <div className="flex items-center justify-between font-extrabold text-neutral-900">
-                        <span>{line.quantity}x {line.name_snapshot}</span>
-                        <span className="font-black text-neutral-900">{formatINR(line.line_total || (Number(line.unit_price) * line.quantity))}</span>
-                      </div>
-                      {line.notes && (
-                        <div className="mt-1.5 text-[11px] text-emerald-950 bg-emerald-50/90 p-2 rounded-lg border border-emerald-200/80 font-medium leading-relaxed">
-                          <span className="font-extrabold text-emerald-900 block mb-0.5">🥗 Selected Custom Ingredients:</span>
-                          {line.notes}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {to && session.can('orders.update.status') && (
-                <button
-                  onClick={() => void advance(order)}
-                  disabled={working === order.id}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 active:scale-[0.99] px-4 py-2.5 text-xs font-black text-white transition-all shadow-sm cursor-pointer disabled:opacity-60"
-                >
-                  {working === order.id ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}
-                  Mark {ORDER_STATUS_LABELS[to]}
-                </button>
-              )}
-            </div>
-          );
-        })}
+        {displayedOrders.map((order) => (
+          <OrderCard
+            key={order.id}
+            order={order}
+            session={session}
+            working={working}
+            onAdvance={advance}
+          />
+        ))}
       </div>
     </div>
   );

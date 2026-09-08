@@ -6,10 +6,12 @@ import {
   TrendingUp, PlayCircle, LayoutGrid, List, ShieldCheck, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatINR, ORDER_STATUS_LABELS, type Order, type OrderStatus } from '@brokole/domain';
+import {
+  formatINR, ORDER_STATUS_LABELS, type Order, type OrderStatus,
+  fetchCloudOrders, updateCloudOrderStatus,
+} from '@brokole/domain';
 import { api, isApiConfigured } from '../lib/api';
 import type { AdminSession } from '../lib/useSession';
-import { fetchCloudOrders, updateCloudOrderStatus } from '../../../../src/lib/cloudOrderSync';
 
 const STATUS_STYLES: Partial<Record<OrderStatus, string>> = {
   placed: 'bg-amber-100 text-amber-900 border-amber-300',
@@ -266,8 +268,7 @@ function getLocalStorageOrders(): Order[] {
 }
 
 export function SubscriptionsScreen({ session }: { session: AdminSession }) {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>(() => getFallbackSubscriptionOrders());
   const [activeTab, setActiveTab] = useState<'cards' | 'roster'>('cards');
   const [searchQuery, setSearchQuery] = useState('');
   const [planFilter, setPlanFilter] = useState<'all' | '30days' | '7days' | 'skipped'>('all');
@@ -496,8 +497,13 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       orderMap.set(o.id || o.order_no, o);
     }
 
-    setOrders(Array.from(orderMap.values()));
-    setLoading(false);
+    const newOrders = Array.from(orderMap.values());
+    setOrders((prev) => {
+      const prevSig = prev.map((o) => `${o.id}:${o.status}`).join('|');
+      const nextSig = newOrders.map((o) => `${o.id}:${o.status}`).join('|');
+      if (prevSig === nextSig) return prev;
+      return newOrders;
+    });
   }, []);
 
   useEffect(() => {
@@ -571,28 +577,16 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       const orderId = order.id || order.order_no;
       if (dismissedSubIds.includes(orderId)) return false;
 
-      const isSubChannel = order.channel === 'subscription';
-      const isSubNo = (order.order_no || '').toLowerCase().includes('sub');
-      const isSubItem = order.lines?.some((l) => {
-        const name = (l.name_snapshot || '').toLowerCase();
-        return (
-          name.includes('subscription') ||
-          name.includes('weekly flex') ||
-          name.includes('shred & gain') ||
-          name.includes('shred and gain') ||
-          name.includes('athlete plan') ||
-          name.includes('30-day') ||
-          name.includes('7-day flex') ||
-          name.includes('pre-book')
-        );
-      });
-      const isSubNotes = order.notes && (
-        order.notes.toLowerCase().includes('subscription') ||
-        order.notes.toLowerCase().includes('weekly flex') ||
-        order.notes.toLowerCase().includes('shred & gain') ||
-        order.notes.toLowerCase().includes('athlete plan')
-      );
-      return isSubChannel || isSubNo || isSubNotes || isSubItem;
+      const isSub = (order as any).channel === 'subscription' ||
+        order.order_no.startsWith('BKL-SUB-') ||
+        (order.lines && order.lines.some((l: any) =>
+          (l.name_snapshot || '').toLowerCase().includes('plan') ||
+          (l.name_snapshot || '').toLowerCase().includes('subscription') ||
+          (l.name_snapshot || '').toLowerCase().includes('weekly') ||
+          (l.name_snapshot || '').toLowerCase().includes('monthly') ||
+          (l.name_snapshot || '').toLowerCase().includes('shred & gain')
+        ));
+      return isSub;
     });
   }, [orders, dismissedSubIds]);
 
@@ -628,15 +622,6 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       return true;
     });
   }, [subscriptionOrders, searchQuery, planFilter, skippedDays]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-neutral-500 py-12 justify-center">
-        <Loader2 className="size-5 animate-spin text-purple-600" />
-        <span className="font-semibold text-neutral-700">Loading VIP Subscription Hub & Calendar Schedules…</span>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

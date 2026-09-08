@@ -1,5 +1,549 @@
 [
   {
+    "id": "ORD-3438",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Mediterranean Chicken Salad x1",
+    "itemsList": [
+      {
+        "title": "Mediterranean Chicken Salad",
+        "quantity": 1,
+        "price": 155
+      }
+    ],
+    "totalAmount": 191.75,
+    "proteinGrams": 34,
+    "calories": 340,
+    "status": "out_for_delivery",
+    "createdAt": "2026-09-08T16:12:49.817Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-3438",
+    "serverId": "ORD-3438",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Mediterranean Chicken Salad",
+        "quantity": 1,
+        "price": 155
+      }
+    ],
+    "total": 191.75,
+    "created_at": "2026-09-08T16:12:49.817Z",
+    "placed_at": "2026-09-08T16:12:49.817Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-7952",
+    "userId": "",
+    "userEmail": "",
+    "customerName": "Customer",
+    "customerPhone": "",
+    "customerAddress": "",
+    "itemsSummary": "Healthy Meals",
+    "itemsList": [],
+    "totalAmount": 0,
+    "proteinGrams": 45,
+    "calories": 520,
+    "status": "in_kitchen",
+    "createdAt": "2026-09-08T16:12:17.217Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-7952",
+    "serverId": "ORD-7952",
+    "customer_name": "Customer",
+    "lines": [],
+    "total": 0,
+    "created_at": "2026-09-08T16:12:17.217Z",
+    "placed_at": "2026-09-08T16:12:17.217Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-5749",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Berry Protein Smoothie x1",
+    "itemsList": [
+      {
+        "title": "Berry Protein Smoothie",
+        "quantity": 1,
+        "price": 125
+      }
+    ],
+    "totalAmount": 160.25,
+    "proteinGrams": 26,
+    "calories": 290,
+    "status": "New Order",
+    "createdAt": "2026-09-08T16:11:32.979Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-5749",
+    "serverId": "ORD-5749",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Berry Protein Smoothie",
+        "quantity": 1,
+        "price": 125
+      }
+    ],
+    "total": 160.25,
+    "created_at": "2026-09-08T16:11:32.979Z",
+    "placed_at": "2026-09-08T16:11:32.979Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-3199",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Green Detox x1",
+    "itemsList": [
+      {
+        "title": "Green Detox",
+        "quantity": 1,
+        "price": 110
+      }
+    ],
+    "totalAmount": 144.5,
+    "proteinGrams": 4,
+    "calories": 170,
+    "status": "New Order",
+    "createdAt": "2026-09-08T16:11:16.003Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-3199",
+    "serverId": "ORD-3199",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Green Detox",
+        "quantity": 1,
+        "price": 110
+      }
+    ],
+    "total": 144.5,
+    "created_at": "2026-09-08T16:11:16.003Z",
+    "placed_at": "2026-09-08T16:11:16.003Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-8447",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Green Detox x1",
+    "itemsList": [
+      {
+        "title": "Green Detox",
+        "quantity": 1,
+        "price": 110
+      }
+    ],
+    "totalAmount": 144.5,
+    "proteinGrams": 4,
+    "calories": 170,
+    "status": "New Order",
+    "createdAt": "2026-09-08T16:07:41.842Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-8447",
+    "serverId": "ORD-8447",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Green Detox",
+        "quantity": 1,
+        "price": 110
+      }
+    ],
+    "total": 144.5,
+    "created_at": "2026-09-08T16:07:41.842Z",
+    "placed_at": "2026-09-08T16:07:41.842Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-9192",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Green Detox x1",
+    "itemsList": [
+      {
+        "title": "Green Detox",
+        "quantity": 1,
+        "price": 110
+      }
+    ],
+    "totalAmount": 144.5,
+    "proteinGrams": 4,
+    "calories": 170,
+    "status": "New Order",
+    "createdAt": "2026-09-08T16:07:22.387Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-9192",
+    "serverId": "ORD-9192",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Green Detox",
+        "quantity": 1,
+        "price": 110
+      }
+    ],
+    "total": 144.5,
+    "created_at": "2026-09-08T16:07:22.387Z",
+    "placed_at": "2026-09-08T16:07:22.387Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-4795",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Paneer Tikka Wrap x2",
+    "itemsList": [
+      {
+        "title": "Paneer Tikka Wrap",
+        "quantity": 2,
+        "price": 170
+      }
+    ],
+    "totalAmount": 386,
+    "proteinGrams": 40,
+    "calories": 860,
+    "status": "New Order",
+    "createdAt": "2026-09-08T16:07:04.718Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-4795",
+    "serverId": "ORD-4795",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Paneer Tikka Wrap",
+        "quantity": 2,
+        "price": 170
+      }
+    ],
+    "total": 386,
+    "created_at": "2026-09-08T16:07:04.718Z",
+    "placed_at": "2026-09-08T16:07:04.718Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-9836",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Paneer Tikka Wrap x2",
+    "itemsList": [
+      {
+        "title": "Paneer Tikka Wrap",
+        "quantity": 2,
+        "price": 170
+      }
+    ],
+    "totalAmount": 386,
+    "proteinGrams": 40,
+    "calories": 860,
+    "status": "New Order",
+    "createdAt": "2026-09-08T16:06:33.226Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-9836",
+    "serverId": "ORD-9836",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Paneer Tikka Wrap",
+        "quantity": 2,
+        "price": 170
+      }
+    ],
+    "total": 386,
+    "created_at": "2026-09-08T16:06:33.226Z",
+    "placed_at": "2026-09-08T16:06:33.226Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-7093",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Mediterranean Chicken & Hummus Bowl x2",
+    "itemsList": [
+      {
+        "title": "Mediterranean Chicken & Hummus Bowl",
+        "quantity": 2,
+        "price": 160
+      }
+    ],
+    "totalAmount": 365,
+    "proteinGrams": 72,
+    "calories": 900,
+    "status": "New Order",
+    "createdAt": "2026-09-08T15:59:03.629Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-7093",
+    "serverId": "ORD-7093",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Mediterranean Chicken & Hummus Bowl",
+        "quantity": 2,
+        "price": 160
+      }
+    ],
+    "total": 365,
+    "created_at": "2026-09-08T15:59:03.629Z",
+    "placed_at": "2026-09-08T15:59:03.629Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-5231",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Quinoa Paneer Bowl x8",
+    "itemsList": [
+      {
+        "title": "Quinoa Paneer Bowl",
+        "quantity": 8,
+        "price": 160
+      }
+    ],
+    "totalAmount": 1344,
+    "proteinGrams": 256,
+    "calories": 3680,
+    "status": "New Order",
+    "createdAt": "2026-09-08T15:52:00.996Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-5231",
+    "serverId": "ORD-5231",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Quinoa Paneer Bowl",
+        "quantity": 8,
+        "price": 160
+      }
+    ],
+    "total": 1344,
+    "created_at": "2026-09-08T15:52:00.996Z",
+    "placed_at": "2026-09-08T15:52:00.996Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-2020",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Quinoa Paneer Bowl x1, Grilled Chicken & Brown Rice x1",
+    "itemsList": [
+      {
+        "title": "Quinoa Paneer Bowl",
+        "quantity": 1,
+        "price": 160
+      },
+      {
+        "title": "Grilled Chicken & Brown Rice",
+        "quantity": 1,
+        "price": 180
+      }
+    ],
+    "totalAmount": 386,
+    "proteinGrams": 70,
+    "calories": 980,
+    "status": "New Order",
+    "createdAt": "2026-09-08T15:51:42.486Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-2020",
+    "serverId": "ORD-2020",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Quinoa Paneer Bowl",
+        "quantity": 1,
+        "price": 160
+      },
+      {
+        "title": "Grilled Chicken & Brown Rice",
+        "quantity": 1,
+        "price": 180
+      }
+    ],
+    "total": 386,
+    "created_at": "2026-09-08T15:51:42.486Z",
+    "placed_at": "2026-09-08T15:51:42.486Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-9435",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Paneer Tikka Millet Bowl x2",
+    "itemsList": [
+      {
+        "title": "Paneer Tikka Millet Bowl",
+        "quantity": 2,
+        "price": 165
+      }
+    ],
+    "totalAmount": 375.5,
+    "proteinGrams": 52,
+    "calories": 960,
+    "status": "New Order",
+    "createdAt": "2026-09-08T15:50:00.546Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-9435",
+    "serverId": "ORD-9435",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Paneer Tikka Millet Bowl",
+        "quantity": 2,
+        "price": 165
+      }
+    ],
+    "total": 375.5,
+    "created_at": "2026-09-08T15:50:00.546Z",
+    "placed_at": "2026-09-08T15:50:00.546Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-8052",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Paneer Tikka Millet Bowl x3",
+    "itemsList": [
+      {
+        "title": "Paneer Tikka Millet Bowl",
+        "quantity": 3,
+        "price": 165
+      }
+    ],
+    "totalAmount": 548.75,
+    "proteinGrams": 78,
+    "calories": 1440,
+    "status": "New Order",
+    "createdAt": "2026-09-08T15:42:39.553Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-8052",
+    "serverId": "ORD-8052",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Paneer Tikka Millet Bowl",
+        "quantity": 3,
+        "price": 165
+      }
+    ],
+    "total": 548.75,
+    "created_at": "2026-09-08T15:42:39.553Z",
+    "placed_at": "2026-09-08T15:42:39.553Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
+    "id": "ORD-1392",
+    "userId": "usr-1788880923329",
+    "userEmail": "google.user@gmail.com",
+    "customerName": "google user",
+    "customerPhone": "9876543210",
+    "customerAddress": "flat zero 875357",
+    "itemsSummary": "Grilled Chicken & Brown Rice x3",
+    "itemsList": [
+      {
+        "title": "Grilled Chicken & Brown Rice",
+        "quantity": 3,
+        "price": 180
+      }
+    ],
+    "totalAmount": 567,
+    "proteinGrams": 114,
+    "calories": 1560,
+    "status": "New Order",
+    "createdAt": "2026-09-08T15:24:06.058Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-1392",
+    "serverId": "ORD-1392",
+    "customer_name": "google user",
+    "lines": [
+      {
+        "title": "Grilled Chicken & Brown Rice",
+        "quantity": 3,
+        "price": 180
+      }
+    ],
+    "total": 567,
+    "created_at": "2026-09-08T15:24:06.058Z",
+    "placed_at": "2026-09-08T15:24:06.058Z",
+    "notes": "",
+    "channel": "direct",
+    "deleted": false
+  },
+  {
     "id": "ORD-5234",
     "userId": "usr-1788861239344",
     "userEmail": "admin@brokole.com",

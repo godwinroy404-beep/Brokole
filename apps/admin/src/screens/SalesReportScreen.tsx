@@ -34,7 +34,7 @@ export function SalesReportScreen({ session }: { session: AdminSession }) {
 
     // 1.5 Try Cloud Sync (All devices)
     try {
-      const { fetchCloudOrders } = await import('../../../../src/lib/cloudOrderSync');
+      const { fetchCloudOrders } = await import('@brokole/domain');
       const cloudOrders = await fetchCloudOrders();
       if (Array.isArray(cloudOrders) && cloudOrders.length > 0) {
         combined.push(...cloudOrders);

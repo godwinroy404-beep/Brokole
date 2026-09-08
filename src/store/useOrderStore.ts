@@ -391,9 +391,23 @@ export const useOrderStore = create<OrderState>()(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
 
-          const updatedLatest = state.latestPlacedOrder
-            ? combined.find((o) => o.id === state.latestPlacedOrder?.id || o.serverId === state.latestPlacedOrder?.serverId) || state.latestPlacedOrder
-            : combined[0] || null;
+          const prevSig = (state.orders || []).map((o) => `${o.id}:${o.status}`).join('|');
+          const nextSig = combined.map((o) => `${o.id}:${o.status}`).join('|');
+
+          // If orders haven't changed and latestPlacedOrder is stable, skip updating to prevent re-renders
+          let updatedLatest = state.latestPlacedOrder;
+          if (state.latestPlacedOrder) {
+            const found = combined.find(
+              (o) => o.id === state.latestPlacedOrder?.id || o.serverId === state.latestPlacedOrder?.serverId
+            );
+            if (found && found.status !== state.latestPlacedOrder.status) {
+              updatedLatest = { ...found, isNew: false };
+            }
+          }
+
+          if (prevSig === nextSig && updatedLatest === state.latestPlacedOrder) {
+            return state;
+          }
 
           return {
             orders: combined,

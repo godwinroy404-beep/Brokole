@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Users, Search, Phone, Mail, MapPin, ArrowUpRight, X, Sparkles, RefreshCw, Loader2, ShoppingBag } from 'lucide-react';
-import { formatINR } from '@brokole/domain';
+import { formatINR, fetchCloudOrders } from '@brokole/domain';
 import { api, isApiConfigured } from '../lib/api';
 import type { AdminSession } from '../lib/useSession';
 
@@ -97,8 +97,6 @@ function getFallbackCustomers(): CustomerProfile[] {
     },
   ];
 }
-
-import { fetchCloudOrders } from '../../../../src/lib/cloudOrderSync';
 
 async function fetchAllLocalAndDiskOrders(): Promise<any[]> {
   const allOrders: any[] = [];

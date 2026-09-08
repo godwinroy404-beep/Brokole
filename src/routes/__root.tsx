@@ -26,7 +26,7 @@ function RootLayout() {
     return (
       <div className="min-h-screen bg-neutral-50 text-neutral-900 flex flex-col antialiased">
         {/* Sonner Toast Notifications */}
-        <Toaster position="top-right" richColors theme="light" />
+        <Toaster position="top-right" richColors theme="light" closeButton duration={2500} />
         <Outlet />
       </div>
     );
@@ -35,7 +35,7 @@ function RootLayout() {
   return (
     <div className="min-h-screen bg-[var(--color-bg-base)] text-[var(--color-text-main)] flex flex-col antialiased">
       {/* Sonner Toast Notifications */}
-      <Toaster position="top-right" richColors theme="light" />
+      <Toaster position="top-right" richColors theme="light" closeButton duration={2500} />
 
       {/* Global Header */}
       <Header />

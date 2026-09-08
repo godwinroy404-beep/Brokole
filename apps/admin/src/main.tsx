@@ -6,7 +6,7 @@ import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Toaster position="top-right" richColors />
+    <Toaster position="top-right" richColors closeButton duration={2500} />
     <App />
   </StrictMode>,
 );
