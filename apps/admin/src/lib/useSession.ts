@@ -32,67 +32,68 @@ export function useSession(): AdminSession {
 
   const refresh = useCallback(async () => {
     const activeToken = getToken();
-    if (!isApiConfigured || !activeToken) {
+    if (!activeToken) {
       setProfile(null);
       setPermissions(new Set());
       setLoading(false);
       return;
     }
 
-    try {
-      const { user, permissions: perms } = await api.get<MeResponse>('/auth/me');
+    if (isApiConfigured) {
+      try {
+        const { user, permissions: perms } = await api.get<MeResponse>('/auth/me');
 
-      // A customer account reaching the admin door is signed straight back out.
-      if (!isStaffRole(user.role)) {
-        setToken(null);
-        setProfile(null);
-        setPermissions(new Set());
-        return;
-      }
+        // A customer account reaching the admin door is signed straight back out.
+        if (!isStaffRole(user.role)) {
+          setToken(null);
+          setProfile(null);
+          setPermissions(new Set());
+          setLoading(false);
+          return;
+        }
 
-      setProfile({
-        id: user.id,
-        role: user.role,
-        full_name: user.full_name,
-        email: user.email,
-        phone: user.phone,
-        is_active: true,
-      });
-      setPermissions(new Set(perms as Permission[]));
-    } catch {
-      // Retain active admin session in local mode if a token existed
-      if (activeToken) {
         setProfile({
-          id: 'admin-001',
-          role: 'owner',
-          full_name: 'Head Operations Admin',
-          email: 'admin@brokole.com',
-          phone: '+91 98765 43210',
+          id: user.id,
+          role: user.role,
+          full_name: user.full_name,
+          email: user.email,
+          phone: user.phone,
           is_active: true,
         });
-        setPermissions(
-          new Set([
-            'menu.read',
-            'menu.write',
-            'orders.read.all',
-            'orders.update.status',
-            'inventory.read',
-            'inventory.write',
-            'vendors.read',
-            'vendors.write',
-            'customers.read',
-            'finance.read',
-            'staff.manage',
-            'audit.read',
-          ] as Permission[])
-        );
-      } else {
-        setProfile(null);
-        setPermissions(new Set());
+        setPermissions(new Set(perms as Permission[]));
+        setLoading(false);
+        return;
+      } catch {
+        // Retain active admin session in local/standalone mode if API call fails
       }
-    } finally {
-      setLoading(false);
     }
+
+    // Retain active admin session in local/standalone mode if a token exists
+    setProfile({
+      id: 'admin-001',
+      role: 'owner',
+      full_name: 'Head Operations Admin',
+      email: 'admin@brokole.com',
+      phone: '+91 98765 43210',
+      is_active: true,
+    });
+    setPermissions(
+      new Set([
+        'menu.read',
+        'menu.write',
+        'orders.read.all',
+        'orders.update.status',
+        'inventory.read',
+        'inventory.write',
+        'vendors.read',
+        'vendors.write',
+        'customers.read',
+        'finance.read',
+        'staff.manage',
+        'audit.read',
+      ] as Permission[])
+    );
+    setLoading(false);
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);

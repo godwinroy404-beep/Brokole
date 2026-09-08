@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet, createRootRoute } from '@tanstack/react-router';
+import { Outlet, createRootRoute, useLocation } from '@tanstack/react-router';
 import { Header } from '../components/Header';
 import { BottomNav } from '../components/BottomNav';
 import { CartDrawer } from '../components/CartDrawer';
@@ -16,8 +16,21 @@ export const Route = createRootRoute({
 });
 
 function RootLayout() {
+  const location = useLocation();
+  const isAdmin = location.pathname.startsWith('/admin');
+
   useCartSync();
   useAppBootstrap();
+
+  if (isAdmin) {
+    return (
+      <div className="min-h-screen bg-neutral-50 text-neutral-900 flex flex-col antialiased">
+        {/* Sonner Toast Notifications */}
+        <Toaster position="top-right" richColors theme="light" />
+        <Outlet />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--color-bg-base)] text-[var(--color-text-main)] flex flex-col antialiased">

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as R404RouteImport } from './routes/404'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CategoriesRouteImport } from './routes/categories'
 import { Route as CustomBowlRouteImport } from './routes/custom-bowl'
 import { Route as KitchenRouteImport } from './routes/kitchen'
@@ -39,6 +40,11 @@ const R404Route = R404RouteImport.update({
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategoriesRoute = CategoriesRouteImport.update({
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/$': typeof SplatRoute
   '/404': typeof R404Route
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRoute
   '/categories': typeof CategoriesRoute
   '/custom-bowl': typeof CustomBowlRoute
   '/kitchen': typeof KitchenRoute
@@ -95,6 +102,7 @@ export interface FileRoutesByTo {
   '/$': typeof SplatRoute
   '/404': typeof R404Route
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRoute
   '/categories': typeof CategoriesRoute
   '/custom-bowl': typeof CustomBowlRoute
   '/kitchen': typeof KitchenRoute
@@ -109,6 +117,7 @@ export interface FileRoutesById {
   '/$': typeof SplatRoute
   '/404': typeof R404Route
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRoute
   '/categories': typeof CategoriesRoute
   '/custom-bowl': typeof CustomBowlRoute
   '/kitchen': typeof KitchenRoute
@@ -124,6 +133,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/404'
     | '/account'
+    | '/admin'
     | '/categories'
     | '/custom-bowl'
     | '/kitchen'
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/404'
     | '/account'
+    | '/admin'
     | '/categories'
     | '/custom-bowl'
     | '/kitchen'
@@ -150,6 +161,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/404'
     | '/account'
+    | '/admin'
     | '/categories'
     | '/custom-bowl'
     | '/kitchen'
@@ -164,6 +176,7 @@ export interface RootRouteChildren {
   SplatRoute: typeof SplatRoute
   R404Route: typeof R404Route
   AccountRoute: typeof AccountRoute
+  AdminRoute: typeof AdminRoute
   CategoriesRoute: typeof CategoriesRoute
   CustomBowlRoute: typeof CustomBowlRoute
   KitchenRoute: typeof KitchenRoute
@@ -201,6 +214,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/categories': {
@@ -260,6 +280,7 @@ const rootRouteChildren: RootRouteChildren = {
   SplatRoute: SplatRoute,
   R404Route: R404Route,
   AccountRoute: AccountRoute,
+  AdminRoute: AdminRoute,
   CategoriesRoute: CategoriesRoute,
   CustomBowlRoute: CustomBowlRoute,
   KitchenRoute: KitchenRoute,

@@ -6,6 +6,12 @@
   --color-primary-light: #e8f5e9;
   --color-primary-muted: #2e7d32;
 
+  --color-brand-50: oklch(0.96 0.03 145);
+  --color-brand-100: oklch(0.92 0.06 145);
+  --color-brand-500: oklch(0.62 0.14 145);
+  --color-brand-600: oklch(0.55 0.14 145);
+  --color-brand-700: oklch(0.47 0.12 145);
+
   --color-accent: #84cc16;
   --color-accent-hover: #65a30d;
   --color-accent-light: #f7fee7;

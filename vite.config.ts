@@ -181,6 +181,7 @@ export default defineConfig({
     alias: {
       '~': path.resolve(__dirname, './src'),
       '@': path.resolve(__dirname, './src'),
+      '@brokole/domain': path.resolve(__dirname, './packages/domain/src/index.ts'),
     },
   },
   server: {
