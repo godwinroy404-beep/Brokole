@@ -231,16 +231,39 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { void fetchOrders(); }, [fetchOrders]);
-
-  // Live board by continuous real-time polling across all devices.
   useEffect(() => {
-    const tick = () => {
-      if (document.visibilityState === 'visible') void fetchOrders();
+    void fetchOrders();
+  }, [fetchOrders]);
+
+  // Live real-time multi-device order sync with 2s polling and broadcast events
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('brokole-live-sync-channel');
+        bc.onmessage = () => {
+          void fetchOrders();
+        };
+      }
+    } catch {}
+
+    const handleCustom = () => {
+      void fetchOrders();
     };
-    const interval = window.setInterval(tick, 3000);
+
+    window.addEventListener('bkl-orders-updated', handleCustom);
+    window.addEventListener('storage', handleCustom);
+
+    const tick = () => {
+      void fetchOrders();
+    };
+    const interval = window.setInterval(tick, 2000);
     document.addEventListener('visibilitychange', tick);
+
     return () => {
+      bc?.close();
+      window.removeEventListener('bkl-orders-updated', handleCustom);
+      window.removeEventListener('storage', handleCustom);
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', tick);
     };

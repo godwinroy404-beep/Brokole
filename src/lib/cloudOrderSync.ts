@@ -35,7 +35,12 @@ export interface CloudOrderPayload {
 }
 
 let memoryOrdersCache: CloudOrderPayload[] = [];
-let lastFetchTime = 0;
+let syncChannel: BroadcastChannel | null = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    syncChannel = new BroadcastChannel('brokole-live-sync-channel');
+  }
+} catch {}
 
 /**
  * Normalizes an order record into a unified shape.
@@ -70,21 +75,30 @@ function normalizeOrder(o: any): CloudOrderPayload {
 }
 
 /**
- * Fetches all orders from the cloud sync bin.
+ * Fetches all orders from the cloud sync bin with cache busting.
  */
 export async function fetchCloudOrders(): Promise<CloudOrderPayload[]> {
   try {
-    const res = await fetch(CLOUD_ORDERS_BIN, {
+    const url = `${CLOUD_ORDERS_BIN}?_t=${Date.now()}`;
+    const res = await fetch(url, {
       method: 'GET',
-      headers: { 'Cache-Control': 'no-cache' },
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
     });
 
     if (res.ok) {
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+
       if (Array.isArray(data?.orders)) {
         memoryOrdersCache = data.orders.map(normalizeOrder);
-        lastFetchTime = Date.now();
-        // Also update local storage backup
         try {
           localStorage.setItem('brokole-cloud-orders-cache', JSON.stringify(memoryOrdersCache));
         } catch {}
@@ -129,6 +143,12 @@ export async function pushCloudOrder(order: any): Promise<void> {
     localStorage.setItem('brokole-cloud-orders-cache', JSON.stringify(memoryOrdersCache));
   } catch {}
 
+  // Broadcast to other tabs on same device
+  try {
+    syncChannel?.postMessage({ type: 'ORDER_UPDATED', order: norm });
+    window.dispatchEvent(new CustomEvent('bkl-orders-updated', { detail: norm }));
+  } catch {}
+
   // Also push to local dev server endpoint if running on localhost
   try {
     fetch('/api/local-orders-sync', {
@@ -140,15 +160,15 @@ export async function pushCloudOrder(order: any): Promise<void> {
 
   // Push to Global Cloud Bin
   try {
-    // Re-fetch latest first to avoid overwriting orders placed by other devices
     let currentOrders = memoryOrdersCache;
     try {
-      const freshRes = await fetch(CLOUD_ORDERS_BIN, {
+      const freshRes = await fetch(`${CLOUD_ORDERS_BIN}?_t=${Date.now()}`, {
         method: 'GET',
-        headers: { 'Cache-Control': 'no-cache' },
+        headers: { 'Cache-Control': 'no-cache, no-store' },
       });
       if (freshRes.ok) {
-        const freshData = await freshRes.json();
+        const text = await freshRes.text();
+        const freshData = JSON.parse(text);
         if (Array.isArray(freshData?.orders)) {
           const freshNormalized = freshData.orders.map(normalizeOrder);
           const map = new Map<string, CloudOrderPayload>();
@@ -192,7 +212,6 @@ export async function updateCloudOrderStatus(orderId: string, newStatus: string)
   if (targetFound) {
     await pushCloudOrder(targetFound);
   } else {
-    // If not in cache, create status delta
     await pushCloudOrder({ id: orderId, status: newStatus });
   }
 }
@@ -202,7 +221,7 @@ export async function updateCloudOrderStatus(orderId: string, newStatus: string)
  */
 export async function fetchCloudPowerBowl(): Promise<any[]> {
   try {
-    const res = await fetch(CLOUD_POWER_BOWL_BIN, {
+    const res = await fetch(`${CLOUD_POWER_BOWL_BIN}?_t=${Date.now()}`, {
       method: 'GET',
       headers: { 'Cache-Control': 'no-cache' },
     });
