@@ -86,6 +86,7 @@ interface OrderState {
   resetOrders: () => void;
 
   cancelUserOrder: (orderId: string, reason?: string) => Promise<{ ok: boolean; error?: string }>;
+  forceCancelUserOrder: (orderId: string, reason?: string) => Promise<{ ok: boolean; error?: string }>;
 
   /** Loads this customer's real orders. RLS guarantees they can only be theirs. */
   loadMyOrders: () => Promise<void>;
@@ -237,13 +238,69 @@ export const useOrderStore = create<OrderState>()(
           return { ok: false, error: 'Order cannot be cancelled once it is packed or out for delivery' };
         }
 
+        const id = order.id || orderId;
+
         // Cancel locally in Zustand immediately
-        get().updateOrderStatus(order.id, 'Cancelled');
+        get().updateOrderStatus(id, 'Cancelled');
+        get().clearLatestPlacedOrder();
+
+        // Write to dismissed storage immediately
+        try {
+          const raw = localStorage.getItem('brokole-dismissed-orders');
+          const parsed = raw ? JSON.parse(raw) : {};
+          parsed[id] = Date.now();
+          if (order.serverId) parsed[order.serverId] = Date.now();
+          localStorage.setItem('brokole-dismissed-orders', JSON.stringify(parsed));
+        } catch { }
+
+        // Update cloud sync
+        void updateCloudOrderStatus(id, 'cancelled');
 
         // If backend API is configured, notify it in background without failing UI
         if (isApiConfigured) {
-          const key = order.serverId || order.id;
+          const key = order.serverId || id;
           void cancelOrderApi(key, reason).catch(() => { });
+        }
+
+        return { ok: true };
+      },
+
+      forceCancelUserOrder: async (orderId, reason) => {
+        const state = get();
+        let order = state.orders.find((o) => o.id === orderId || o.serverId === orderId);
+
+        if (!order && state.latestPlacedOrder && (state.latestPlacedOrder.id === orderId || state.latestPlacedOrder.serverId === orderId)) {
+          order = state.latestPlacedOrder;
+        }
+
+        if (!order) {
+          const lower = (orderId || '').toLowerCase();
+          order = state.orders.find(
+            (o) => (o.id || '').toLowerCase() === lower || (o.serverId || '').toLowerCase() === lower
+          );
+        }
+
+        const id = order?.id || orderId;
+
+        // Force cancel locally in Zustand immediately no matter what status
+        get().updateOrderStatus(id, 'Cancelled');
+        get().clearLatestPlacedOrder();
+
+        // Write to dismissed storage immediately
+        try {
+          const raw = localStorage.getItem('brokole-dismissed-orders');
+          const parsed = raw ? JSON.parse(raw) : {};
+          parsed[id] = Date.now();
+          if (order?.serverId) parsed[order.serverId] = Date.now();
+          localStorage.setItem('brokole-dismissed-orders', JSON.stringify(parsed));
+        } catch { }
+
+        // Update cloud and disk sync immediately
+        void updateCloudOrderStatus(id, 'cancelled');
+
+        if (isApiConfigured) {
+          const key = order?.serverId || id;
+          void cancelOrderApi(key, reason || 'Cancelled by customer via force CANCEL').catch(() => { });
         }
 
         return { ok: true };
@@ -417,6 +474,33 @@ export const useOrderStore = create<OrderState>()(
       },
 
       subscribeToMyOrders: () => {
+        const handleStorageOrBroadcast = () => {
+          try {
+            const raw = localStorage.getItem('brokole-orders-storage');
+            if (!raw) {
+              set({ orders: [], latestPlacedOrder: null });
+            }
+          } catch {}
+          void get().loadMyOrders();
+        };
+
+        window.addEventListener('storage', handleStorageOrBroadcast);
+        window.addEventListener('bkl-orders-updated', handleStorageOrBroadcast);
+
+        let bc: BroadcastChannel | null = null;
+        try {
+          if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+            bc = new BroadcastChannel('brokole-live-sync-channel');
+            bc.onmessage = (ev) => {
+              if (ev.data?.type === 'ORDERS_CLEARED') {
+                set({ orders: [], latestPlacedOrder: null });
+              } else {
+                void get().loadMyOrders();
+              }
+            };
+          }
+        } catch {}
+
         const tick = () => {
           if (document.visibilityState === 'visible') void get().loadMyOrders();
         };
@@ -424,6 +508,9 @@ export const useOrderStore = create<OrderState>()(
         document.addEventListener('visibilitychange', tick);
 
         return () => {
+          bc?.close();
+          window.removeEventListener('storage', handleStorageOrBroadcast);
+          window.removeEventListener('bkl-orders-updated', handleStorageOrBroadcast);
           window.clearInterval(interval);
           document.removeEventListener('visibilitychange', tick);
         };

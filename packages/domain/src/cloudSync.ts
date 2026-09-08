@@ -318,6 +318,41 @@ export async function fetchCloudPowerBowl(): Promise<any[]> {
   return [];
 }
 
+/**
+ * Clears all orders in the global cloud store and memory cache (for testing / reset).
+ */
+export async function clearAllCloudOrders(): Promise<void> {
+  memoryOrdersCache = [];
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('brokole-cloud-orders-cache');
+    }
+  } catch {}
+
+  try {
+    await fetch(CLOUD_ORDERS_BIN, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: [] }),
+    });
+  } catch {}
+
+  try {
+    fetch('/api/local-orders-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'save_all', orders: [] }),
+    }).catch(() => {});
+  } catch {}
+
+  try {
+    syncChannel?.postMessage({ type: 'ORDERS_CLEARED' });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+    }
+  } catch {}
+}
+
 export async function pushCloudPowerBowl(ingredients: any[]): Promise<void> {
   try {
     await fetch(CLOUD_POWER_BOWL_BIN, {

@@ -83,6 +83,20 @@ export const OrderStatusBanner: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
 
+  // Keep dismissed IDs in sync with localStorage and real-time events
+  useEffect(() => {
+    const handleSync = () => {
+      setDismissedIds(new Set(Object.keys(readJson(DISMISSED_KEY))));
+    };
+
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('bkl-orders-updated', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('bkl-orders-updated', handleSync);
+    };
+  }, []);
+
   // Read current route location from TanStack Router
   const routerState = useRouterState();
   const pathname = routerState.location.pathname;
@@ -102,11 +116,13 @@ export const OrderStatusBanner: React.FC = () => {
         ));
 
     const isExpired = (o: any) => {
-      if (!o || dismissedIds.has(o.id)) return true;
+      if (!o) return true;
+      if (dismissedIds.has(o.id) || (o.serverId && dismissedIds.has(o.serverId))) return true;
+      if (isCancelled(o.status)) return true; // Cancelled orders do not show delivery tracker
       if (!isDone(o.status)) return false; // Active in-progress orders are never expired
 
       const seen = readJson(FIRST_SEEN_KEY);
-      const firstSeen = seen[o.id];
+      const firstSeen = seen[o.id] || (o.serverId ? seen[o.serverId] : undefined);
 
       if (firstSeen) {
         return Date.now() - firstSeen > DELIVERED_AUTO_HIDE_MS;
@@ -121,31 +137,23 @@ export const OrderStatusBanner: React.FC = () => {
       return false;
     };
 
-    if (latestPlacedOrder && !isSub(latestPlacedOrder) && !isExpired(latestPlacedOrder)) {
-      return latestPlacedOrder;
-    }
+    if (!latestPlacedOrder) return null;
+    if (isSub(latestPlacedOrder)) return null;
+    if (isCancelled(latestPlacedOrder.status)) return null;
+    if (dismissedIds.has(latestPlacedOrder.id) || (latestPlacedOrder.serverId && dismissedIds.has(latestPlacedOrder.serverId))) return null;
+    if (isExpired(latestPlacedOrder)) return null;
 
-    if (!orders || orders.length === 0) return null;
+    // Check if the current placed order has live status updates in the orders store
+    const liveMatch = orders.find(
+      (o) => o.id === latestPlacedOrder.id || (latestPlacedOrder.serverId && (o.serverId === latestPlacedOrder.serverId || o.id === latestPlacedOrder.serverId))
+    );
 
-    // Filter order matching user and exclude subscription orders
-    const matchUser = (o: any) => {
-      if (isSub(o)) return false; // DO NOT show subscription orders in live status tracker banner
+    const targetOrder = liveMatch || latestPlacedOrder;
+    if (isCancelled(targetOrder.status)) return null;
+    if (dismissedIds.has(targetOrder.id) || (targetOrder.serverId && dismissedIds.has(targetOrder.serverId))) return null;
+    if (isExpired(targetOrder)) return null;
 
-      if (!user || isApiConfigured) return true;
-      return (
-        (o.userId && o.userId === user.id) ||
-        (o.userEmail && user.email && o.userEmail.toLowerCase() === user.email.toLowerCase()) ||
-        (o.customerName && user.name && o.customerName.toLowerCase() === user.name.toLowerCase()) ||
-        o.customerName === 'You'
-      );
-    };
-
-    const userOrders = orders.filter(matchUser);
-    const pending = userOrders.find((o) => !isDone(o.status));
-    if (pending) return pending;
-
-    const lastDone = userOrders.find((o) => isDone(o.status) && !isExpired(o));
-    return lastDone ?? null;
+    return targetOrder;
   }, [orders, latestPlacedOrder, user, dismissedIds]);
 
   // Expand smoothly with a gentle delay when a fresh new order is first placed
@@ -195,8 +203,14 @@ export const OrderStatusBanner: React.FC = () => {
     return () => clearTimeout(timer);
   }, [activeOrderId, activeDone, dismissedIds, dismissOrder]);
 
-  // HIDE IF NO ORDER PLACED or on kitchen admin page
-  if (pathname.startsWith('/kitchen') || !activeOrder || dismissedIds.has(activeOrder.id)) {
+  // HIDE IF NO ORDER PLACED, or order is cancelled/dismissed, or on kitchen admin page
+  if (
+    pathname.startsWith('/kitchen') ||
+    !activeOrder ||
+    dismissedIds.has(activeOrder.id) ||
+    (activeOrder.serverId && dismissedIds.has(activeOrder.serverId)) ||
+    isCancelled(activeOrder.status)
+  ) {
     return null;
   }
 
@@ -287,12 +301,27 @@ export const OrderStatusBanner: React.FC = () => {
 
   const handleCancelOrder = async () => {
     if (!activeOrder || isCancelling) return;
+    const targetId = activeOrder.id;
     setIsCancelling(true);
-    const res = await useOrderStore.getState().cancelUserOrder(activeOrder.id, 'Cancelled by customer via tracker');
+    const res = await useOrderStore.getState().cancelUserOrder(targetId, 'Cancelled by customer via tracker');
     setIsCancelling(false);
     if (res.ok) {
-      toast.success(`Order #${activeOrder.id} cancelled successfully`);
-      handleMinimize();
+      toast.success(`Order #${targetId} cancelled successfully`);
+      dismissOrder(targetId);
+    } else {
+      toast.error(res.error || 'Could not cancel order');
+    }
+  };
+
+  const handleForceCancelOrder = async () => {
+    if (!activeOrder || isCancelling) return;
+    const targetId = activeOrder.id;
+    setIsCancelling(true);
+    const res = await useOrderStore.getState().forceCancelUserOrder(targetId, 'Force cancelled by customer via CANCEL ORDER button');
+    setIsCancelling(false);
+    if (res.ok) {
+      toast.success(`Order #${targetId} CANCELLED`);
+      dismissOrder(targetId);
     } else {
       toast.error(res.error || 'Could not cancel order');
     }
@@ -347,7 +376,7 @@ export const OrderStatusBanner: React.FC = () => {
               <span className="font-mono text-[11px] font-bold text-neutral-500">{activeOrder.id}</span>
               <span className={`text-[10px] font-extrabold uppercase tracking-wider ${statusInfo.scooterMode === 'cancelled' ? 'text-rose-600' : 'text-emerald-600'
                 }`}>
-                {statusInfo.scooterMode === 'cancelled' ? 'Cancelled' : statusInfo.scooterMode === 'delivered' ? 'Done' : 'Live'}
+              {statusInfo.scooterMode === 'cancelled' ? 'Cancelled' : statusInfo.scooterMode === 'delivered' ? 'Done' : 'Live'}
               </span>
             </div>
             <div className="text-xs font-black text-neutral-900 group-hover:text-emerald-600 transition">
@@ -387,7 +416,7 @@ export const OrderStatusBanner: React.FC = () => {
 
               <div className="flex items-center gap-1.5 relative">
                 {/* 3-Dot Options Dropdown Button */}
-                {isCancellable && (
+                {!isDone(activeOrder.status) && (
                   <div className="relative">
                     <button
                       type="button"
@@ -403,19 +432,34 @@ export const OrderStatusBanner: React.FC = () => {
 
                     {/* Dropdown Menu Popup */}
                     {showDropdown && (
-                      <div className="absolute right-0 top-full mt-1.5 w-44 bg-white border border-neutral-200 rounded-2xl shadow-xl z-30 py-1 overflow-hidden animate-scale-in">
+                      <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-neutral-200 rounded-2xl shadow-xl z-30 py-1 overflow-hidden animate-scale-in">
+                        {isCancellable && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowDropdown(false);
+                              setShowCancelConfirmModal(true);
+                            }}
+                            disabled={isCancelling}
+                            className="w-full px-3.5 py-2.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                          >
+                            <Ban className="size-4 text-neutral-400 shrink-0" />
+                            <span>{isCancelling ? 'cancelling…' : 'cancel order'}</span>
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
                             setShowDropdown(false);
-                            setShowCancelConfirmModal(true);
+                            await handleForceCancelOrder();
                           }}
                           disabled={isCancelling}
-                          className="w-full px-3.5 py-2.5 text-left text-xs font-extrabold text-rose-600 hover:bg-rose-50 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                          className="w-full px-3.5 py-2.5 text-left text-xs font-black text-rose-600 hover:bg-rose-50 transition flex items-center gap-2 cursor-pointer disabled:opacity-50 border-t border-neutral-100"
                         >
                           <Ban className="size-4 text-rose-500 shrink-0" />
-                          <span>{isCancelling ? 'Cancelling…' : 'Cancel Order'}</span>
+                          <span>{isCancelling ? 'Cancelling…' : 'CANCEL ORDER'}</span>
                         </button>
                       </div>
                     )}
@@ -596,7 +640,7 @@ export const OrderStatusBanner: React.FC = () => {
 
             <div className="space-y-1">
               <h3 className="text-base font-black text-neutral-900 tracking-tight">
-                Cancel Order #{activeOrder.id}?
+                Cancel order #{activeOrder.id}?
               </h3>
               <p className="text-xs text-neutral-500 font-medium leading-relaxed">
                 Are you sure you want to cancel this order? Kitchen preparation will stop immediately.
@@ -607,9 +651,9 @@ export const OrderStatusBanner: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowCancelConfirmModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 font-bold text-xs transition cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 font-medium text-xs transition cursor-pointer"
               >
-                Keep Order
+                keep order
               </button>
 
               <button
@@ -619,9 +663,9 @@ export const OrderStatusBanner: React.FC = () => {
                   await handleCancelOrder();
                 }}
                 disabled={isCancelling}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs transition shadow-xs cursor-pointer disabled:opacity-60"
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition shadow-xs cursor-pointer disabled:opacity-60"
               >
-                {isCancelling ? 'Cancelling…' : 'Yes, Cancel'}
+                {isCancelling ? 'cancelling…' : 'cancel order'}
               </button>
             </div>
           </div>

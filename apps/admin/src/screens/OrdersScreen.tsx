@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, ArrowRight, Loader2, CheckCircle2, Bike, Utensils } from 'lucide-react';
+import { RefreshCw, ArrowRight, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   formatINR, nextStatus, ORDER_STATUS_LABELS, ORDER_ACTION_LABELS,
   type Order, type OrderStatus,
-  fetchCloudOrders, updateCloudOrderStatus,
+  fetchCloudOrders, updateCloudOrderStatus, clearAllCloudOrders,
 } from '@brokole/domain';
 import { api, isApiConfigured } from '../lib/api';
 import type { AdminSession } from '../lib/useSession';
@@ -29,7 +29,6 @@ const ACTION_BUTTON_CONFIG: Partial<
       hover: string;
       text: string;
       label: string;
-      Icon: React.ComponentType<{ className?: string }>;
     }
   >
 > = {
@@ -37,43 +36,37 @@ const ACTION_BUTTON_CONFIG: Partial<
     bg: 'bg-amber-600',
     hover: 'hover:bg-amber-500',
     text: 'text-white',
-    label: 'Accept & Start Cooking 🍳',
-    Icon: Utensils,
+    label: 'Accept & Start Cooking',
   },
   paid: {
     bg: 'bg-amber-600',
     hover: 'hover:bg-amber-500',
     text: 'text-white',
-    label: 'Accept & Start Cooking 🍳',
-    Icon: Utensils,
+    label: 'Accept & Start Cooking',
   },
   accepted: {
     bg: 'bg-amber-600',
     hover: 'hover:bg-amber-500',
     text: 'text-white',
-    label: 'Start Cooking 🍳',
-    Icon: Utensils,
+    label: 'Start Cooking',
   },
   in_kitchen: {
     bg: 'bg-indigo-600',
     hover: 'hover:bg-indigo-500',
     text: 'text-white',
-    label: 'Hand to Rider (Out for Delivery) 🛵',
-    Icon: Bike,
+    label: 'Hand to Rider (Out for Delivery)',
   },
   packed: {
     bg: 'bg-indigo-600',
     hover: 'hover:bg-indigo-500',
     text: 'text-white',
-    label: 'Hand to Rider (Out for Delivery) 🛵',
-    Icon: Bike,
+    label: 'Hand to Rider (Out for Delivery)',
   },
   out_for_delivery: {
     bg: 'bg-emerald-700',
     hover: 'hover:bg-emerald-600',
     text: 'text-white',
-    label: 'Confirm Delivered ✅',
-    Icon: CheckCircle2,
+    label: 'Confirm Delivered',
   },
 };
 
@@ -167,50 +160,10 @@ function getFallbackOrders(): Order[] {
       }
     }
   } catch {
-    /* fallback to demo array */
+    /* fallback to empty array */
   }
 
-  return [
-    {
-      id: 'ord-101',
-      order_no: 'BKL-260907-101',
-      status: 'in_kitchen',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 420,
-      tax_amount: 21,
-      delivery_fee: 0,
-      total: 441,
-      total_calories: 620,
-      total_protein: 58,
-      customer_id: 'usr-1',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: 'Alex Morgan (+91 70662 12122) - Koramangala',
-      lines: [
-        { name_snapshot: 'Quinoa Paneer Bowl', quantity: 1, unit_price: '280', line_total: '280' },
-        { name_snapshot: 'Berry Protein Smoothie', quantity: 1, unit_price: '140', line_total: '140' },
-      ],
-    },
-    {
-      id: 'ord-102',
-      order_no: 'BKL-260907-102',
-      status: 'accepted',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 360,
-      tax_amount: 18,
-      delivery_fee: 0,
-      total: 378,
-      total_calories: 780,
-      total_protein: 64,
-      customer_id: 'usr-2',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: 'Priya Sharma (+91 98230 44122) - Indiranagar',
-      lines: [
-        { name_snapshot: 'Grilled Chicken & Brown Rice', quantity: 1, unit_price: '360', line_total: '360' },
-      ],
-    },
-  ];
+  return [];
 }
 
 interface OrderCardProps {
@@ -218,9 +171,10 @@ interface OrderCardProps {
   session: AdminSession;
   working: string | null;
   onAdvance: (order: Order) => void;
+  onCancel: (order: Order) => void;
 }
 
-const OrderCard = React.memo(function OrderCard({ order, session, working, onAdvance }: OrderCardProps) {
+const OrderCard = React.memo(function OrderCard({ order, session, working, onAdvance, onCancel }: OrderCardProps) {
   const to = nextStatus(order.status);
   const hasTaxOrDelivery = Number(order.tax_amount) > 0 || Number(order.delivery_fee) > 0;
 
@@ -282,29 +236,39 @@ const OrderCard = React.memo(function OrderCard({ order, session, working, onAdv
         </div>
       )}
 
-      {to && session.can('orders.update.status') && (() => {
-        const btnCfg = ACTION_BUTTON_CONFIG[order.status];
-        const BtnIcon = btnCfg?.Icon || ArrowRight;
-        const btnLabel = btnCfg?.label || `Mark ${ORDER_STATUS_LABELS[to]}`;
-        const btnBg = btnCfg?.bg || 'bg-emerald-700';
-        const btnHover = btnCfg?.hover || 'hover:bg-emerald-600';
-        const btnText = btnCfg?.text || 'text-white';
+      {session.can('orders.update.status') && (
+        <div className="space-y-2 pt-1">
+          {to && (() => {
+            const btnCfg = ACTION_BUTTON_CONFIG[order.status];
+            const btnLabel = btnCfg?.label || `Mark ${ORDER_STATUS_LABELS[to]}`;
+            const btnBg = btnCfg?.bg || 'bg-emerald-700';
+            const btnHover = btnCfg?.hover || 'hover:bg-emerald-600';
+            const btnText = btnCfg?.text || 'text-white';
 
-        return (
-          <button
-            onClick={() => onAdvance(order)}
-            disabled={working === order.id}
-            className={`w-full flex items-center justify-center gap-2 rounded-xl ${btnBg} ${btnHover} active:scale-[0.99] px-4 py-2.5 text-xs font-black ${btnText} transition-all shadow-sm cursor-pointer disabled:opacity-60`}
-          >
-            {working === order.id ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <BtnIcon className="size-3.5" />
-            )}
-            <span>{btnLabel}</span>
-          </button>
-        );
-      })()}
+            return (
+              <button
+                onClick={() => onAdvance(order)}
+                disabled={working === order.id}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl ${btnBg} ${btnHover} active:scale-[0.99] px-4 py-2.5 text-xs font-black ${btnText} transition-all shadow-sm cursor-pointer disabled:opacity-60`}
+              >
+                {working === order.id && <Loader2 className="size-3.5 animate-spin" />}
+                <span>{btnLabel}</span>
+              </button>
+            );
+          })()}
+
+          {order.status !== 'cancelled' && order.status !== 'refunded' && (
+            <button
+              onClick={() => onCancel(order)}
+              disabled={working === order.id}
+              className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50/80 hover:bg-rose-100 active:scale-[0.99] px-3 py-2 text-xs font-black text-rose-700 transition-all cursor-pointer disabled:opacity-50"
+              title="Force cancel order (Admin / Testing Override)"
+            >
+              <span>CANCEL</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 });
@@ -312,6 +276,7 @@ const OrderCard = React.memo(function OrderCard({ order, session, working, onAdv
 export function OrdersScreen({ session }: { session: AdminSession }) {
   const [orders, setOrders] = useState<Order[]>(() => getFallbackOrders());
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
 
@@ -532,6 +497,71 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
     setWorking(null);
   }
 
+  async function cancelOrder(order: Order) {
+    if (!window.confirm(`Force cancel order ${order.order_no} for testing?`)) return;
+
+    setWorking(order.id);
+    if (isApiConfigured) {
+      try {
+        await api.patch(`/orders/${order.id}/status`, { status: 'cancelled' });
+      } catch {
+        /* ignore */
+      }
+    }
+
+    updateLocalOrderStatus(order.order_no || order.id, 'cancelled');
+    toast.success(`Order ${order.order_no} CANCELLED`, {
+      description: 'Customer tracker and kitchen board updated.',
+    });
+    await fetchOrders(false);
+    setWorking(null);
+  }
+
+  const handleDeleteAllOrders = async () => {
+    if (!window.confirm('Are you sure you want to delete ALL active & completed orders for testing? This will wipe the order list across all devices.')) {
+      return;
+    }
+
+    setIsDeletingAll(true);
+    try {
+      // 1. Clear global cloud store
+      await clearAllCloudOrders();
+
+      // 2. Clear local disk sync store
+      await fetch('/api/local-orders-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_all', orders: [] }),
+      }).catch(() => {});
+
+      // 3. Clear localStorage in browser
+      try {
+        localStorage.setItem('brokole-orders-storage', JSON.stringify({ state: { orders: [], latestPlacedOrder: null } }));
+        localStorage.removeItem('brokole-cloud-orders-cache');
+      } catch {}
+
+      // 4. Reset orders state
+      setOrders([]);
+
+      // 5. Broadcast to all active tabs & customer view
+      try {
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+        if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('brokole-live-sync-channel');
+          bc.postMessage({ type: 'ORDERS_CLEARED' });
+          bc.close();
+        }
+      } catch {}
+
+      toast.success('All orders deleted for testing!');
+    } catch {
+      toast.error('Failed to clear orders');
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   const activeOrders = orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'refunded');
   const completedOrders = orders.filter((o) => o.status === 'delivered' || o.status === 'cancelled' || o.status === 'refunded');
 
@@ -556,7 +586,7 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Toggle Active vs Completed */}
           <div className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white p-1 text-xs font-medium shadow-2xs">
             <button
@@ -578,6 +608,20 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
               All / Delivered ({orders.length})
             </button>
           </div>
+
+          {/* Delete All Orders (Testing) Button */}
+          {orders.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDeleteAllOrders}
+              disabled={isDeletingAll}
+              className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 hover:text-rose-800 transition shadow-2xs cursor-pointer disabled:opacity-75"
+              title="Delete all active and delivered orders for testing"
+            >
+              <Trash2 className={`size-3.5 ${isDeletingAll ? 'animate-spin' : 'text-rose-600'}`} />
+              <span>{isDeletingAll ? 'Deleting…' : 'Delete All (Testing)'}</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -610,6 +654,7 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
             session={session}
             working={working}
             onAdvance={advance}
+            onCancel={cancelOrder}
           />
         ))}
       </div>

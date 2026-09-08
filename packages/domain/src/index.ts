@@ -110,12 +110,12 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 export const ORDER_ACTION_LABELS: Partial<Record<OrderStatus, string>> = {
-  placed: 'Accept & Start Cooking 🍳',
-  paid: 'Accept & Start Cooking 🍳',
-  accepted: 'Start Cooking 🍳',
-  in_kitchen: 'Hand to Rider (Out for Delivery) 🛵',
-  packed: 'Hand to Rider (Out for Delivery) 🛵',
-  out_for_delivery: 'Confirm Delivered ✅',
+  placed: 'Accept & Start Cooking',
+  paid: 'Accept & Start Cooking',
+  accepted: 'Start Cooking',
+  in_kitchen: 'Hand to Rider (Out for Delivery)',
+  packed: 'Hand to Rider (Out for Delivery)',
+  out_for_delivery: 'Confirm Delivered',
 };
 
 // ── money ───────────────────────────────────────────────────────────────────
