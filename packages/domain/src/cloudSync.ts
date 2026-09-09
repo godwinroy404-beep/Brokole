@@ -47,17 +47,28 @@ try {
  */
 export function normalizeCloudOrder(o: any): CloudOrderPayload {
   const id = String(o.id || o.order_no || o.serverId || `ORD-${Date.now()}`);
+  const itemsSummary = o.itemsSummary || (o.lines ? o.lines.map((l: any) => l.name_snapshot || l.title).join(', ') : 'Healthy Meals');
+  const isSubscription =
+    o.channel === 'subscription' ||
+    id.toLowerCase().includes('sub') ||
+    String(o.order_no || '').toLowerCase().includes('sub') ||
+    itemsSummary.toLowerCase().includes('plan') ||
+    itemsSummary.toLowerCase().includes('subscription') ||
+    itemsSummary.toLowerCase().includes('weekly') ||
+    itemsSummary.toLowerCase().includes('monthly') ||
+    itemsSummary.toLowerCase().includes('shred');
+
   return {
     id,
     order_no: o.order_no || o.id || id,
     serverId: o.serverId || id,
     userId: o.userId || o.customer_id || '',
-    userEmail: o.userEmail || '',
+    userEmail: o.userEmail || o.email || '',
     customerName: o.customerName || o.customer_name || 'Customer',
     customer_name: o.customer_name || o.customerName || 'Customer',
     customerPhone: o.customerPhone || o.phone || '',
     customerAddress: o.customerAddress || o.address || '',
-    itemsSummary: o.itemsSummary || (o.lines ? o.lines.map((l: any) => l.name_snapshot || l.title).join(', ') : 'Healthy Meals'),
+    itemsSummary,
     itemsList: o.itemsList || o.lines || [],
     lines: o.lines || o.itemsList || [],
     totalAmount: Number(o.totalAmount || o.total || 0),
@@ -69,9 +80,10 @@ export function normalizeCloudOrder(o: any): CloudOrderPayload {
     created_at: o.created_at || o.createdAt || new Date().toISOString(),
     placed_at: o.placed_at || o.createdAt || new Date().toISOString(),
     notes: o.notes || '',
-    channel: o.channel || (id.toLowerCase().includes('sub') ? 'subscription' : 'direct'),
+    channel: isSubscription ? 'subscription' : (o.channel || 'direct'),
+    skipped_days: o.skipped_days || [],
     deleted: Boolean(o.deleted),
-  };
+  } as any;
 }
 
 /**

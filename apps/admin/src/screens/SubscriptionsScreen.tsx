@@ -65,100 +65,7 @@ function formatSkippedDaysText(orderSkippedDays: (string | number)[], weekDays: 
 }
 
 function getFallbackSubscriptionOrders(): Order[] {
-  return [
-    {
-      id: 'sub-roy-1',
-      order_no: 'BKL-SUB-701',
-      status: 'accepted',
-      channel: 'subscription',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 1808,
-      tax_amount: 91,
-      delivery_fee: 0,
-      total: 1899,
-      total_calories: 680,
-      total_protein: 55,
-      customer_id: 'usr-roy',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: 'Brokole Shred & Gain Pro (7-Day Weekly) Goal Plan',
-      lines: [
-        { name_snapshot: 'Brokole Shred & Gain Pro (7-Day Weekly)', quantity: 1, unit_price: '1899', line_total: '1899' },
-      ],
-      customer_name: 'r roy',
-      phone: '+91 98765 00000',
-      skipped_days: [],
-    } as any,
-    {
-      id: 'sub-1',
-      order_no: 'BKL-SUB-301',
-      status: 'accepted',
-      channel: 'subscription',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 7142,
-      tax_amount: 357,
-      delivery_fee: 0,
-      total: 7499,
-      total_calories: 680,
-      total_protein: 55,
-      customer_id: 'usr-1',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: 'Muscle Build & Hypertrophy Goal Plan [SKIPPED_DAYS: 4, 11]',
-      lines: [
-        { name_snapshot: 'Shred & Gain Pro (30 Days) - High Protein', quantity: 1, unit_price: '7499', line_total: '7499' },
-      ],
-      customer_name: 'Siddharth Rao',
-      phone: '+91 98451 22910',
-      skipped_days: [4, 11],
-    } as any,
-    {
-      id: 'sub-2',
-      order_no: 'BKL-SUB-302',
-      status: 'accepted',
-      channel: 'subscription',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 8570,
-      tax_amount: 429,
-      delivery_fee: 0,
-      total: 8999,
-      total_calories: 720,
-      total_protein: 64,
-      customer_id: 'usr-2',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: 'Elite Athlete Plan (30 Days) - Athletic Performance Goal Plan',
-      lines: [
-        { name_snapshot: '30-Day Elite Athlete VIP Plan', quantity: 1, unit_price: '8999', line_total: '8999' },
-      ],
-      customer_name: 'Ananya Deshmukh',
-      phone: '+91 98200 41109',
-      skipped_days: [15],
-    } as any,
-    {
-      id: 'sub-3',
-      order_no: 'BKL-SUB-303',
-      status: 'in_kitchen',
-      channel: 'subscription',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 1808,
-      tax_amount: 91,
-      delivery_fee: 0,
-      total: 1899,
-      total_calories: 520,
-      total_protein: 42,
-      customer_id: 'usr-3',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: '7-Day Fat Loss & Lean Shred Flex Plan',
-      lines: [
-        { name_snapshot: '7-Day Flex Shred Plan (Low Carb)', quantity: 1, unit_price: '1899', line_total: '1899' },
-      ],
-      customer_name: 'Priya Sharma',
-      phone: '+91 98230 44122',
-      skipped_days: [],
-    } as any,
-  ];
+  return [];
 }
 
 async function fetchDiskOrders(): Promise<Order[]> {
@@ -293,8 +200,15 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
     );
 
     try {
+      await fetch('/api/local-orders-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: 'accepted' }),
+      }).catch(() => {});
+      void updateCloudOrderStatus(orderId, 'accepted');
+
       if (isApiConfigured) {
-        await api.patch(`/orders/${encodeURIComponent(orderId)}/status`, { status: 'accepted' });
+        await api.patch(`/orders/${encodeURIComponent(orderId)}/status`, { status: 'accepted' }).catch(() => {});
       }
       toast.success(`Subscription ${orderId} Accepted! 🎉`, {
         description: 'Customer subscription activated for daily kitchen schedule.',
@@ -304,6 +218,11 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
         description: 'Activated locally.',
       });
     }
+
+    try {
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+    } catch {}
   };
 
   const handleDismissSubscription = async (orderId: string) => {
@@ -844,13 +763,6 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                   }
                 } catch { /* ignore */ }
 
-                const isRoyOrder = (order as any).customer_name?.toLowerCase().includes('roy') ||
-                                   (order as any).customer_name?.toLowerCase().includes('valued') ||
-                                   order.id?.includes('roy') ||
-                                   order.id?.includes('303') ||
-                                   order.order_no?.includes('303') ||
-                                   order.order_no?.includes('701');
-
                 if (Array.isArray((order as any).skipped_days) && (order as any).skipped_days.length > 0) {
                   orderSkippedDays = (order as any).skipped_days;
                 } else if (order.notes && order.notes.includes('[SKIPPED_DAYS:')) {
@@ -860,8 +772,8 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                   }
                 }
 
-                if (localDates.length > 0 && (isRoyOrder || orderSkippedDays.length === 0)) {
-                  orderSkippedDays = [...new Set([...orderSkippedDays, ...localDates])];
+                if (orderSkippedDays.length === 0 && localDates.length > 0) {
+                  orderSkippedDays = [...localDates];
                 }
 
                 const activeSkippedCount = orderSkippedDays.length;

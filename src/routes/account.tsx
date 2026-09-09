@@ -245,15 +245,17 @@ function AccountPage() {
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new CustomEvent('bkl-skips-updated', { detail: datesArr }));
 
-      const currentCustomerName = (user as any)?.name || (user as any)?.full_name || 'r roy';
-      const currentCustomerPhone = (user as any)?.phone || '+91 98765 00000';
-      const currentPlanTitle = subOrder?.itemsSummary || 'Brokole Shred & Gain Pro (7-Day Weekly)';
-      const currentOrderId = subOrder?.id || 'BKL-SUB-701';
+      const currentCustomerName = (user as any)?.name || (user as any)?.full_name || subOrder?.customerName || 'Valued Customer';
+      const currentCustomerPhone = (user as any)?.phone || subOrder?.customerPhone || '+91 98765 43210';
+      const currentPlanTitle = subOrder?.itemsSummary || 'Brokole Meal Subscription Plan';
+      const currentOrderId = subOrder?.id || 'BKL-SUB-001';
 
       void pushLocalOrderSync({
         id: currentOrderId,
         order_no: currentOrderId,
         customer_name: currentCustomerName,
+        customerName: currentCustomerName,
+        customerPhone: currentCustomerPhone,
         phone: currentCustomerPhone,
         channel: 'subscription',
         itemsSummary: currentPlanTitle,
@@ -263,7 +265,7 @@ function AccountPage() {
         skipped_days: datesArr,
         notes: `${currentPlanTitle} [SKIPPED_DAYS: ${datesArr.join(',')}]`,
         lines: [
-          { name_snapshot: currentPlanTitle, quantity: 1, unit_price: '1899', line_total: '1899' },
+          { name_snapshot: currentPlanTitle, quantity: 1, unit_price: String(subOrder?.totalAmount || 1899), line_total: String(subOrder?.totalAmount || 1899) },
         ],
       });
     } catch { /* ignore */ }
