@@ -170,19 +170,66 @@ interface OrderCardProps {
   order: Order;
   session: AdminSession;
   working: string | null;
+  liveSkippedDates: string[];
   onAdvance: (order: Order) => void;
   onCancel: (order: Order) => void;
 }
 
-const OrderCard = React.memo(function OrderCard({ order, session, working, onAdvance, onCancel }: OrderCardProps) {
+const OrderCard = React.memo(function OrderCard({ order, session, working, liveSkippedDates, onAdvance, onCancel }: OrderCardProps) {
   const to = nextStatus(order.status);
   const hasTaxOrDelivery = Number(order.tax_amount) > 0 || Number(order.delivery_fee) > 0;
 
+  const todayIso = new Date().toISOString().split('T')[0];
+  const todayDayNum = new Date().getDate();
+
+  const isSubscription =
+    (order as any).channel === 'subscription' ||
+    order.order_no.startsWith('BKL-SUB-') ||
+    (order.notes && (
+      order.notes.toLowerCase().includes('plan') ||
+      order.notes.toLowerCase().includes('subscription') ||
+      order.notes.toLowerCase().includes('weekly') ||
+      order.notes.toLowerCase().includes('monthly') ||
+      order.notes.toLowerCase().includes('pre-order') ||
+      order.notes.toLowerCase().includes('pre-booked')
+    )) ||
+    (order.lines && order.lines.some((l: any) => {
+      const name = (l.name_snapshot || l.title || '').toLowerCase();
+      return (
+        name.includes('plan') ||
+        name.includes('subscription') ||
+        name.includes('weekly') ||
+        name.includes('monthly') ||
+        name.includes('pre-order') ||
+        name.includes('pre-booked') ||
+        name.includes('shred & gain')
+      );
+    }));
+
+  const isSkippedToday =
+    isSubscription &&
+    (liveSkippedDates.includes(todayIso) ||
+     liveSkippedDates.includes(String(todayDayNum)) ||
+     liveSkippedDates.includes(todayDayNum as any));
+
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xs hover:shadow-xs transition-all space-y-3">
+    <div className={`rounded-2xl border bg-white p-4 shadow-2xs hover:shadow-xs transition-all space-y-3 ${
+      isSkippedToday ? 'border-amber-400 ring-2 ring-amber-300 bg-amber-50/20' : 'border-neutral-200'
+    }`}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="font-mono text-sm font-black text-neutral-900 tracking-tight">{order.order_no}</div>
+          <div className="font-mono text-sm font-black text-neutral-900 tracking-tight flex items-center gap-1.5 flex-wrap">
+            <span>{order.order_no}</span>
+            {isSubscription ? (
+              <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 text-[9px] font-black uppercase tracking-wider border border-purple-200">
+                🍱 VIP Subscription
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-[9px] font-black uppercase tracking-wider border border-emerald-200">
+                🛒 Web Order
+              </span>
+            )}
+          </div>
           <div className="text-[11px] text-neutral-500 font-semibold">{order.business_date}</div>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-black shadow-2xs ${STATUS_STYLES[order.status] ?? 'bg-neutral-100 text-neutral-700'}`}>
@@ -196,6 +243,14 @@ const OrderCard = React.memo(function OrderCard({ order, session, working, onAdv
           {Math.round(Number(order.total_protein))}g protein · {Math.round(Number(order.total_calories))} kcal
         </span>
       </div>
+
+      {/* Skipped Today Notice Banner */}
+      {isSkippedToday && (
+        <div className="bg-amber-100/90 border border-amber-300 text-amber-950 p-2.5 rounded-xl text-xs flex items-center gap-2 font-bold animate-pulse">
+          <span>⚠️</span>
+          <span>Customer Skipped Today • Kitchen Cooking Paused</span>
+        </div>
+      )}
 
       {hasTaxOrDelivery && (
         <div className="flex items-center justify-between text-[11px] text-neutral-500 font-medium bg-neutral-50/80 px-2.5 py-1.5 rounded-lg border border-neutral-100">
@@ -239,6 +294,14 @@ const OrderCard = React.memo(function OrderCard({ order, session, working, onAdv
       {session.can('orders.update.status') && (
         <div className="space-y-2 pt-1">
           {to && (() => {
+            if (isSkippedToday) {
+              return (
+                <div className="w-full text-center py-2 px-3 rounded-xl bg-neutral-100 text-neutral-500 font-bold text-xs border border-neutral-200">
+                  ⏸️ Meal Skipped by Customer (Cooking Paused)
+                </div>
+              );
+            }
+
             const btnCfg = ACTION_BUTTON_CONFIG[order.status];
             const btnLabel = btnCfg?.label || `Mark ${ORDER_STATUS_LABELS[to]}`;
             const btnBg = btnCfg?.bg || 'bg-emerald-700';
@@ -279,6 +342,17 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [working, setWorking] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [viewFilter, setViewFilter] = useState<'active' | 'skipped' | 'all'>('active');
+  const [channelFilter, setChannelFilter] = useState<'all' | 'web' | 'subscription'>('all');
+
+  const [liveSkippedDates, setLiveSkippedDates] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('bkl_skipped_dates');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const fetchOrders = useCallback(async (isManual = false) => {
     if (isManual) setIsSyncing(true);
@@ -368,6 +442,12 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
       if (prevSig === nextSig) return prev;
       return loaded;
     });
+
+    try {
+      const saved = localStorage.getItem('bkl_skipped_dates');
+      if (saved) setLiveSkippedDates(JSON.parse(saved));
+    } catch {}
+
     if (isManual) setIsSyncing(false);
   }, []);
 
@@ -375,23 +455,35 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
     void fetchOrders(false);
   }, [fetchOrders]);
 
-  // Live real-time multi-device order sync with 2s polling and broadcast events
+  // Live real-time multi-device order sync with 2s polling, broadcast events and skip listener
   useEffect(() => {
     let bc: BroadcastChannel | null = null;
     try {
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         bc = new BroadcastChannel('brokole-live-sync-channel');
-        bc.onmessage = () => {
+        bc.onmessage = (ev) => {
+          if (ev.data?.type === 'skips_updated' && Array.isArray(ev.data.dates)) {
+            setLiveSkippedDates(ev.data.dates);
+          }
           void fetchOrders(false);
         };
       }
     } catch {}
 
-    const handleCustom = () => {
+    const handleCustom = (e?: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setLiveSkippedDates(e.detail);
+      } else {
+        try {
+          const saved = localStorage.getItem('bkl_skipped_dates');
+          if (saved) setLiveSkippedDates(JSON.parse(saved));
+        } catch {}
+      }
       void fetchOrders(false);
     };
 
     window.addEventListener('bkl-orders-updated', handleCustom);
+    window.addEventListener('bkl-skips-updated', handleCustom);
     window.addEventListener('storage', handleCustom);
 
     const tick = () => {
@@ -403,6 +495,7 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
     return () => {
       bc?.close();
       window.removeEventListener('bkl-orders-updated', handleCustom);
+      window.removeEventListener('bkl-skips-updated', handleCustom);
       window.removeEventListener('storage', handleCustom);
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', tick);
@@ -562,10 +655,62 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
     }
   };
 
-  const activeOrders = orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'refunded');
+  const isSubOrder = (o: Order) =>
+    (o as any).channel === 'subscription' ||
+    o.order_no.startsWith('BKL-SUB-') ||
+    (o.notes && (
+      o.notes.toLowerCase().includes('plan') ||
+      o.notes.toLowerCase().includes('subscription') ||
+      o.notes.toLowerCase().includes('weekly') ||
+      o.notes.toLowerCase().includes('monthly') ||
+      o.notes.toLowerCase().includes('pre-order') ||
+      o.notes.toLowerCase().includes('pre-booked')
+    )) ||
+    (o.lines && o.lines.some((l: any) => {
+      const name = (l.name_snapshot || l.title || '').toLowerCase();
+      return (
+        name.includes('plan') ||
+        name.includes('subscription') ||
+        name.includes('weekly') ||
+        name.includes('monthly') ||
+        name.includes('pre-order') ||
+        name.includes('pre-booked') ||
+        name.includes('shred & gain')
+      );
+    }));
+
+  const isOrderSkippedToday = (o: Order) => {
+    if (!isSubOrder(o)) return false;
+    const todayIso = new Date().toISOString().split('T')[0];
+    const todayDayNum = new Date().getDate();
+    return (
+      liveSkippedDates.includes(todayIso) ||
+      liveSkippedDates.includes(String(todayDayNum)) ||
+      liveSkippedDates.includes(todayDayNum as any)
+    );
+  };
+
+  const activeOrders = orders.filter((o) => {
+    if (o.status === 'delivered' || o.status === 'cancelled' || o.status === 'refunded') return false;
+    if (isOrderSkippedToday(o)) return false;
+    return true;
+  });
+
+  const skippedTodayOrders = orders.filter((o) => isOrderSkippedToday(o));
   const completedOrders = orders.filter((o) => o.status === 'delivered' || o.status === 'cancelled' || o.status === 'refunded');
 
-  const displayedOrders = showCompleted ? orders : activeOrders;
+  let baseOrders = activeOrders;
+  if (viewFilter === 'all') {
+    baseOrders = orders;
+  } else if (viewFilter === 'skipped') {
+    baseOrders = skippedTodayOrders;
+  }
+
+  const displayedOrders = baseOrders.filter((o) => {
+    if (channelFilter === 'web') return !isSubOrder(o);
+    if (channelFilter === 'subscription') return isSubOrder(o);
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -576,36 +721,53 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
               {activeOrders.length} Active
             </span>
+            {skippedTodayOrders.length > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-xs font-black border border-amber-300">
+                {skippedTodayOrders.length} Skipped Today
+              </span>
+            )}
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 text-[11px] font-medium">
               <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
               Live Sync
             </span>
           </h2>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Auto-updating in background. Updates only the orders section without reloading the page.
+            Auto-updating in background. Skipped subscription meals are automatically excluded from today's active kitchen queue.
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Toggle Active vs Completed */}
+          {/* Toggle Active vs Skipped Today vs All Orders */}
           <div className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white p-1 text-xs font-medium shadow-2xs">
             <button
               type="button"
-              onClick={() => setShowCompleted(false)}
+              onClick={() => { setViewFilter('active'); setShowCompleted(false); }}
               className={`rounded-md px-2.5 py-1 transition cursor-pointer ${
-                !showCompleted ? 'bg-emerald-600 font-bold text-white' : 'text-neutral-600 hover:text-neutral-900'
+                viewFilter === 'active' ? 'bg-emerald-600 font-bold text-white' : 'text-neutral-600 hover:text-neutral-900'
               }`}
             >
               Active Queue ({activeOrders.length})
             </button>
+            {skippedTodayOrders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setViewFilter('skipped'); setShowCompleted(false); }}
+                className={`rounded-md px-2.5 py-1 transition cursor-pointer flex items-center gap-1 ${
+                  viewFilter === 'skipped' ? 'bg-amber-500 font-bold text-white shadow-xs' : 'text-amber-800 hover:text-amber-950 bg-amber-50'
+                }`}
+              >
+                <span>⏸ Skipped Today</span>
+                <span className="text-[10px] font-black opacity-90">({skippedTodayOrders.length})</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setShowCompleted(true)}
+              onClick={() => { setViewFilter('all'); setShowCompleted(true); }}
               className={`rounded-md px-2.5 py-1 transition cursor-pointer ${
-                showCompleted ? 'bg-neutral-800 font-bold text-white' : 'text-neutral-600 hover:text-neutral-900'
+                viewFilter === 'all' ? 'bg-neutral-800 font-bold text-white' : 'text-neutral-600 hover:text-neutral-900'
               }`}
             >
-              All / Delivered ({orders.length})
+              All / History ({orders.length})
             </button>
           </div>
 
@@ -639,9 +801,48 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
         </div>
       </div>
 
+      {/* Channel Filters: All vs Web Store Orders vs Subscriptions */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setChannelFilter('all')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+            channelFilter === 'all'
+              ? 'bg-neutral-900 text-white border-neutral-900 shadow-xs'
+              : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
+          }`}
+        >
+          All Types ({baseOrders.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setChannelFilter('web')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border flex items-center gap-1.5 ${
+            channelFilter === 'web'
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+              : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
+          }`}
+        >
+          <span>🛒 Web Orders</span>
+          <span className="text-[10px] opacity-80">({baseOrders.filter((o) => !isSubOrder(o)).length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setChannelFilter('subscription')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border flex items-center gap-1.5 ${
+            channelFilter === 'subscription'
+              ? 'bg-purple-700 text-white border-purple-700 shadow-xs'
+              : 'bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50'
+          }`}
+        >
+          <span>🍱 VIP Subscriptions</span>
+          <span className="text-[10px] opacity-80">({baseOrders.filter((o) => isSubOrder(o)).length})</span>
+        </button>
+      </div>
+
       {displayedOrders.length === 0 && (
         <div className="rounded-xl border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-500 space-y-1">
-          <p className="font-semibold text-neutral-700">No active orders in live queue</p>
+          <p className="font-semibold text-neutral-700">No matching orders in live queue</p>
           <p className="text-xs text-neutral-400">Delivered & completed orders are stored in Executive Order History.</p>
         </div>
       )}
@@ -653,6 +854,7 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
             order={order}
             session={session}
             working={working}
+            liveSkippedDates={liveSkippedDates}
             onAdvance={advance}
             onCancel={cancelOrder}
           />

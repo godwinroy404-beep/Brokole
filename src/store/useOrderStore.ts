@@ -228,14 +228,15 @@ export const useOrderStore = create<OrderState>()(
         }
 
         const currentStatus = (order.status || '').toLowerCase();
-        if (
-          currentStatus.includes('packed') ||
-          currentStatus.includes('out for delivery') ||
-          currentStatus.includes('delivered') ||
-          currentStatus.includes('cancelled') ||
-          currentStatus.includes('canceled')
-        ) {
-          return { ok: false, error: 'Order cannot be cancelled once it is packed or out for delivery' };
+        if (currentStatus.includes('delivered') || currentStatus.includes('cancelled') || currentStatus.includes('canceled')) {
+          return { ok: false, error: 'Order is already completed or cancelled.' };
+        }
+
+        if (currentStatus.includes('in_kitchen') || currentStatus.includes('preparing') || currentStatus.includes('packed') || currentStatus.includes('out for delivery')) {
+          return {
+            ok: false,
+            error: 'Kitchen has already started preparing this meal. Type "CANCEL" to force override for testing.',
+          };
         }
 
         const id = order.id || orderId;
@@ -363,22 +364,54 @@ export const useOrderStore = create<OrderState>()(
         let diskOrders: Order[] = [];
         try {
           const rawDisk = await fetchLocalSyncOrders();
+          const currentUser = useAuthStore.getState().user;
+          const currentUserId = currentUser?.id ? String(currentUser.id).toLowerCase() : '';
+          const currentUserEmail = currentUser?.email ? String(currentUser.email).toLowerCase() : '';
+          const currentUserName = currentUser?.name ? String(currentUser.name).toLowerCase().trim() : '';
+          const currentUserPhone = currentUser?.phone ? String(currentUser.phone).replace(/\D/g, '') : '';
+
+          const existingLocalIds = new Set(
+            (get().orders || []).map((o) => String(o.id || o.serverId || '').toLowerCase())
+          );
+          if (get().latestPlacedOrder?.id) {
+            existingLocalIds.add(String(get().latestPlacedOrder!.id).toLowerCase());
+          }
+
           if (Array.isArray(rawDisk)) {
-            diskOrders = rawDisk.map((diskOrd: any) => ({
-              id: diskOrd.id || diskOrd.order_no || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-              serverId: diskOrd.serverId || diskOrd.id,
-              customerName: diskOrd.customerName || diskOrd.customer_name || 'Customer',
-              customerPhone: diskOrd.customerPhone || diskOrd.customer_phone || '+91 98765 00000',
-              customerAddress: diskOrd.customerAddress || diskOrd.customer_address || 'Delivery Address',
-              itemsSummary: diskOrd.itemsSummary || 'Fresh Healthy Bowl',
-              itemsList: diskOrd.itemsList || [],
-              totalAmount: diskOrd.totalAmount || diskOrd.total || 399,
-              proteinGrams: diskOrd.proteinGrams || diskOrd.total_protein || 45,
-              calories: diskOrd.calories || diskOrd.total_calories || 520,
-              status: diskOrd.status || 'New Order',
-              createdAt: diskOrd.createdAt || diskOrd.created_at || new Date().toISOString(),
-              timeFormatted: 'Just now',
-            }));
+            diskOrders = rawDisk
+              .filter((diskOrd: any) => {
+                const ordId = String(diskOrd.id || diskOrd.order_no || diskOrd.serverId || '').toLowerCase();
+                const ordUserId = String(diskOrd.userId || '').toLowerCase();
+                const ordEmail = String(diskOrd.userEmail || '').toLowerCase();
+                const ordName = String(diskOrd.customerName || diskOrd.customer_name || '').toLowerCase().trim();
+                const ordPhone = String(diskOrd.customerPhone || diskOrd.customer_phone || '').replace(/\D/g, '');
+
+                // 1. Matched by session/local ID
+                if (existingLocalIds.has(ordId)) return true;
+
+                // 2. Matched by user credentials
+                if (currentUserId && ordUserId && ordUserId === currentUserId) return true;
+                if (currentUserEmail && ordEmail && ordEmail === currentUserEmail) return true;
+                if (currentUserPhone && ordPhone && ordPhone.length >= 7 && currentUserPhone.includes(ordPhone)) return true;
+                if (currentUserName && ordName && ordName.length > 2 && ordName === currentUserName) return true;
+
+                return false;
+              })
+              .map((diskOrd: any) => ({
+                id: diskOrd.id || diskOrd.order_no || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+                serverId: diskOrd.serverId || diskOrd.id,
+                customerName: diskOrd.customerName || diskOrd.customer_name || 'Customer',
+                customerPhone: diskOrd.customerPhone || diskOrd.customer_phone || '+91 98765 00000',
+                customerAddress: diskOrd.customerAddress || diskOrd.customer_address || 'Delivery Address',
+                itemsSummary: diskOrd.itemsSummary || 'Fresh Healthy Bowl',
+                itemsList: diskOrd.itemsList || [],
+                totalAmount: diskOrd.totalAmount || diskOrd.total || 399,
+                proteinGrams: diskOrd.proteinGrams || diskOrd.total_protein || 45,
+                calories: diskOrd.calories || diskOrd.total_calories || 520,
+                status: diskOrd.status || 'New Order',
+                createdAt: diskOrd.createdAt || diskOrd.created_at || new Date().toISOString(),
+                timeFormatted: 'Just now',
+              }));
           }
         } catch {
           /* ignore */
@@ -393,7 +426,7 @@ export const useOrderStore = create<OrderState>()(
             if (key) map.set(key, o);
           }
 
-          // 2. Disk sync orders
+          // 2. Disk sync orders (already filtered by user ownership)
           for (const o of diskOrders) {
             const key = o.id || o.serverId;
             if (key) {

@@ -17,7 +17,7 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   const location = useLocation();
-  const isOpsConsole = location.pathname.startsWith('/ops-console');
+  const isOpsConsole = location.pathname.startsWith('/ops-console') || location.pathname.startsWith('/admin');
 
   useCartSync();
   useAppBootstrap();

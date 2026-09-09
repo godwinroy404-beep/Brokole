@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as R404RouteImport } from './routes/404'
 import { Route as AccountRouteImport } from './routes/account'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CategoriesRouteImport } from './routes/categories'
 import { Route as CustomBowlRouteImport } from './routes/custom-bowl'
 import { Route as KitchenRouteImport } from './routes/kitchen'
@@ -20,6 +21,8 @@ import { Route as MenuRouteImport } from './routes/menu'
 import { Route as MyMacrosRouteImport } from './routes/my-macros'
 import { Route as OpsConsoleRouteImport } from './routes/ops-console'
 import { Route as SubscriptionsRouteImport } from './routes/subscriptions'
+import { Route as AdminSplatRouteImport } from './routes/admin.$'
+import { Route as OpsConsoleSplatRouteImport } from './routes/ops-console.$'
 import { Route as ProductHandleRouteImport } from './routes/product.$handle'
 
 const IndexRoute = IndexRouteImport.update({
@@ -40,6 +43,11 @@ const R404Route = R404RouteImport.update({
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategoriesRoute = CategoriesRouteImport.update({
@@ -77,6 +85,16 @@ const SubscriptionsRoute = SubscriptionsRouteImport.update({
   path: '/subscriptions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminSplatRoute = AdminSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AdminRoute,
+} as any)
+const OpsConsoleSplatRoute = OpsConsoleSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => OpsConsoleRoute,
+} as any)
 const ProductHandleRoute = ProductHandleRouteImport.update({
   id: '/product/$handle',
   path: '/product/$handle',
@@ -88,13 +106,16 @@ export interface FileRoutesByFullPath {
   '/$': typeof SplatRoute
   '/404': typeof R404Route
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRouteWithChildren
   '/categories': typeof CategoriesRoute
   '/custom-bowl': typeof CustomBowlRoute
   '/kitchen': typeof KitchenRoute
   '/menu': typeof MenuRoute
   '/my-macros': typeof MyMacrosRoute
-  '/ops-console': typeof OpsConsoleRoute
+  '/ops-console': typeof OpsConsoleRouteWithChildren
   '/subscriptions': typeof SubscriptionsRoute
+  '/admin/$': typeof AdminSplatRoute
+  '/ops-console/$': typeof OpsConsoleSplatRoute
   '/product/$handle': typeof ProductHandleRoute
 }
 export interface FileRoutesByTo {
@@ -102,13 +123,16 @@ export interface FileRoutesByTo {
   '/$': typeof SplatRoute
   '/404': typeof R404Route
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRouteWithChildren
   '/categories': typeof CategoriesRoute
   '/custom-bowl': typeof CustomBowlRoute
   '/kitchen': typeof KitchenRoute
   '/menu': typeof MenuRoute
   '/my-macros': typeof MyMacrosRoute
-  '/ops-console': typeof OpsConsoleRoute
+  '/ops-console': typeof OpsConsoleRouteWithChildren
   '/subscriptions': typeof SubscriptionsRoute
+  '/admin/$': typeof AdminSplatRoute
+  '/ops-console/$': typeof OpsConsoleSplatRoute
   '/product/$handle': typeof ProductHandleRoute
 }
 export interface FileRoutesById {
@@ -117,13 +141,16 @@ export interface FileRoutesById {
   '/$': typeof SplatRoute
   '/404': typeof R404Route
   '/account': typeof AccountRoute
+  '/admin': typeof AdminRouteWithChildren
   '/categories': typeof CategoriesRoute
   '/custom-bowl': typeof CustomBowlRoute
   '/kitchen': typeof KitchenRoute
   '/menu': typeof MenuRoute
   '/my-macros': typeof MyMacrosRoute
-  '/ops-console': typeof OpsConsoleRoute
+  '/ops-console': typeof OpsConsoleRouteWithChildren
   '/subscriptions': typeof SubscriptionsRoute
+  '/admin/$': typeof AdminSplatRoute
+  '/ops-console/$': typeof OpsConsoleSplatRoute
   '/product/$handle': typeof ProductHandleRoute
 }
 export interface FileRouteTypes {
@@ -133,6 +160,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/404'
     | '/account'
+    | '/admin'
     | '/categories'
     | '/custom-bowl'
     | '/kitchen'
@@ -140,6 +168,8 @@ export interface FileRouteTypes {
     | '/my-macros'
     | '/ops-console'
     | '/subscriptions'
+    | '/admin/$'
+    | '/ops-console/$'
     | '/product/$handle'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -147,6 +177,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/404'
     | '/account'
+    | '/admin'
     | '/categories'
     | '/custom-bowl'
     | '/kitchen'
@@ -154,6 +185,8 @@ export interface FileRouteTypes {
     | '/my-macros'
     | '/ops-console'
     | '/subscriptions'
+    | '/admin/$'
+    | '/ops-console/$'
     | '/product/$handle'
   id:
     | '__root__'
@@ -161,6 +194,7 @@ export interface FileRouteTypes {
     | '/$'
     | '/404'
     | '/account'
+    | '/admin'
     | '/categories'
     | '/custom-bowl'
     | '/kitchen'
@@ -168,6 +202,8 @@ export interface FileRouteTypes {
     | '/my-macros'
     | '/ops-console'
     | '/subscriptions'
+    | '/admin/$'
+    | '/ops-console/$'
     | '/product/$handle'
   fileRoutesById: FileRoutesById
 }
@@ -176,12 +212,13 @@ export interface RootRouteChildren {
   SplatRoute: typeof SplatRoute
   R404Route: typeof R404Route
   AccountRoute: typeof AccountRoute
+  AdminRoute: typeof AdminRouteWithChildren
   CategoriesRoute: typeof CategoriesRoute
   CustomBowlRoute: typeof CustomBowlRoute
   KitchenRoute: typeof KitchenRoute
   MenuRoute: typeof MenuRoute
   MyMacrosRoute: typeof MyMacrosRoute
-  OpsConsoleRoute: typeof OpsConsoleRoute
+  OpsConsoleRoute: typeof OpsConsoleRouteWithChildren
   SubscriptionsRoute: typeof SubscriptionsRoute
   ProductHandleRoute: typeof ProductHandleRoute
 }
@@ -214,6 +251,13 @@ declare module '@tanstack/react-router' {
       path: '/account'
       fullPath: '/account'
       preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/categories': {
@@ -265,6 +309,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubscriptionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/$': {
+      id: '/admin/$'
+      path: '/$'
+      fullPath: '/admin/$'
+      preLoaderRoute: typeof AdminSplatRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/ops-console/$': {
+      id: '/ops-console/$'
+      path: '/$'
+      fullPath: '/ops-console/$'
+      preLoaderRoute: typeof OpsConsoleSplatRouteImport
+      parentRoute: typeof OpsConsoleRoute
+    }
     '/product/$handle': {
       id: '/product/$handle'
       path: '/product/$handle'
@@ -275,17 +333,40 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminSplatRoute: typeof AdminSplatRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminSplatRoute: AdminSplatRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface OpsConsoleRouteChildren {
+  OpsConsoleSplatRoute: typeof OpsConsoleSplatRoute
+}
+
+const OpsConsoleRouteChildren: OpsConsoleRouteChildren = {
+  OpsConsoleSplatRoute: OpsConsoleSplatRoute,
+}
+
+const OpsConsoleRouteWithChildren = OpsConsoleRoute._addFileChildren(
+  OpsConsoleRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   R404Route: R404Route,
   AccountRoute: AccountRoute,
+  AdminRoute: AdminRouteWithChildren,
   CategoriesRoute: CategoriesRoute,
   CustomBowlRoute: CustomBowlRoute,
   KitchenRoute: KitchenRoute,
   MenuRoute: MenuRoute,
   MyMacrosRoute: MyMacrosRoute,
-  OpsConsoleRoute: OpsConsoleRoute,
+  OpsConsoleRoute: OpsConsoleRouteWithChildren,
   SubscriptionsRoute: SubscriptionsRoute,
   ProductHandleRoute: ProductHandleRoute,
 }

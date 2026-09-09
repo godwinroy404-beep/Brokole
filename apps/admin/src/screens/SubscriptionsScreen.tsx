@@ -179,7 +179,14 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
   const [activeTab, setActiveTab] = useState<'cards' | 'roster'>('cards');
   const [searchQuery, setSearchQuery] = useState('');
   const [planFilter, setPlanFilter] = useState<'all' | '30days' | '7days' | 'skipped'>('all');
-  const [skippedDays, setSkippedDays] = useState<number[]>([]);
+  const [liveSkippedDates, setLiveSkippedDates] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('bkl_skipped_dates');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [dismissedSubIds, setDismissedSubIds] = useState<string[]>([]);
   const handleSyncLiveSubscriptions = async () => {
     setDismissedSubIds([]);
@@ -199,30 +206,49 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       )
     );
 
+    // Persist to local storage store so it stays accepted
+    try {
+      const raw = localStorage.getItem('brokole-orders-storage');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.state?.orders)) {
+          parsed.state.orders = parsed.state.orders.map((o: any) =>
+            o.id === orderId || o.serverId === orderId || o.order_no === orderId
+              ? { ...o, status: 'accepted', isNew: false }
+              : o
+          );
+          localStorage.setItem('brokole-orders-storage', JSON.stringify(parsed));
+        }
+      }
+    } catch {}
+
+    void updateCloudOrderStatus(orderId, 'accepted');
+
     try {
       await fetch('/api/local-orders-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, status: 'accepted' }),
       }).catch(() => {});
-      void updateCloudOrderStatus(orderId, 'accepted');
 
       if (isApiConfigured) {
         await api.patch(`/orders/${encodeURIComponent(orderId)}/status`, { status: 'accepted' }).catch(() => {});
       }
-      toast.success(`Subscription ${orderId} Accepted! 🎉`, {
-        description: 'Customer subscription activated for daily kitchen schedule.',
-      });
-    } catch {
-      toast.success(`Subscription ${orderId} Accepted!`, {
-        description: 'Activated locally.',
-      });
-    }
+    } catch {}
 
     try {
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('brokole-live-sync-channel');
+        bc.postMessage({ type: 'order_status_updated', orderId, status: 'accepted' });
+        bc.close();
+      }
     } catch {}
+
+    toast.success(`Subscription ${orderId} Accepted! 🎉`, {
+      description: 'Customer subscription activated for daily kitchen schedule.',
+    });
   };
 
   const handleDismissSubscription = async (orderId: string) => {
@@ -429,62 +455,48 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
     void fetchOrders();
   }, [fetchOrders]);
 
-  // Real-time live polling every 3 seconds for subscriptions across all devices
+  // Real-time live polling every 1.5s + cross-tab BroadcastChannel for instant skip reflection
   useEffect(() => {
-    const tick = () => {
-      if (document.visibilityState === 'visible') void fetchOrders();
-    };
-    const interval = window.setInterval(tick, 3000);
-    return () => window.clearInterval(interval);
-  }, [fetchOrders]);
-
-  useEffect(() => {
-    const handleStorage = () => {
-      try {
-        const saved = localStorage.getItem('bkl_skipped_days');
-        setSkippedDays(saved ? JSON.parse(saved) : []);
-        void fetchOrders();
-      } catch {
-        // ignore
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('brokole-live-sync-channel');
+        bc.onmessage = (ev) => {
+          if (ev.data?.type === 'skips_updated' && Array.isArray(ev.data.dates)) {
+            setLiveSkippedDates(ev.data.dates);
+          }
+          void fetchOrders();
+        };
       }
+    } catch {}
+
+    const handleStorageOrSkips = (e?: any) => {
+      try {
+        if (e?.detail && Array.isArray(e.detail)) {
+          setLiveSkippedDates(e.detail);
+        } else {
+          const saved = localStorage.getItem('bkl_skipped_dates');
+          setLiveSkippedDates(saved ? JSON.parse(saved) : []);
+        }
+      } catch {}
+      void fetchOrders();
     };
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('bkl-skips-updated', handleStorage);
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('bkl-skips-updated', handleStorage);
-    };
-  }, [fetchOrders]);
 
-  // Real skipped days for the month, from subscription_skips.
-  useEffect(() => {
-    if (!isApiConfigured) return;
-    let alive = true;
+    window.addEventListener('storage', handleStorageOrSkips);
+    window.addEventListener('bkl-skips-updated', handleStorageOrSkips);
+    window.addEventListener('bkl-orders-updated', handleStorageOrSkips);
 
-    const now = new Date();
-    const pad = (v: number) => String(v).padStart(2, '0');
-    const first = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
-    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const lastIso = `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`;
-
-    api
-      .get<{ skips: Array<{ skip_date: string }> }>(`/admin/skips?from=${first}&to=${lastIso}`)
-      .then(({ skips }) => {
-        if (!alive) return;
-        setSkippedDays([...new Set(skips.map((s) => Number(String(s.skip_date).slice(8, 10))))]);
-      })
-      .catch(() => { /* the board still works without it */ });
-
-    return () => { alive = false; };
-  }, []);
-
-  useEffect(() => {
     const tick = () => {
       if (document.visibilityState === 'visible') void fetchOrders();
     };
-    const interval = window.setInterval(tick, 4000);
+    const interval = window.setInterval(tick, 1500);
     document.addEventListener('visibilitychange', tick);
+
     return () => {
+      bc?.close();
+      window.removeEventListener('storage', handleStorageOrSkips);
+      window.removeEventListener('bkl-skips-updated', handleStorageOrSkips);
+      window.removeEventListener('bkl-orders-updated', handleStorageOrSkips);
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', tick);
     };
@@ -535,12 +547,11 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       if (planFilter === '30days') return subPlanTitle.toLowerCase().includes('30-day') || subPlanTitle.toLowerCase().includes('monthly');
       if (planFilter === '7days') return subPlanTitle.toLowerCase().includes('7-day') || subPlanTitle.toLowerCase().includes('weekly');
       if (planFilter === 'skipped') {
-        const orderSkippedDays = (order as any).skipped_days || [];
-        return orderSkippedDays.length > 0 || skippedDays.length > 0;
+        return liveSkippedDates.length > 0;
       }
       return true;
     });
-  }, [subscriptionOrders, searchQuery, planFilter, skippedDays]);
+  }, [subscriptionOrders, searchQuery, planFilter, liveSkippedDates]);
 
   return (
     <div className="space-y-6">
@@ -749,33 +760,8 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                 const isMonthly = subPlanTitle.toLowerCase().includes('monthly') || subPlanTitle.toLowerCase().includes('30-day');
                 const totalDays = isMonthly ? 30 : 7;
 
-                // Extract live skipped_days from database order response, notes tag, or storage fallback
-                let orderSkippedDays: (string | number)[] = [];
-
-                const savedDates = localStorage.getItem('bkl_skipped_dates');
-                let localDates: string[] = [];
-                try {
-                  if (savedDates) {
-                    const parsed = JSON.parse(savedDates);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                      localDates = parsed;
-                    }
-                  }
-                } catch { /* ignore */ }
-
-                if (Array.isArray((order as any).skipped_days) && (order as any).skipped_days.length > 0) {
-                  orderSkippedDays = (order as any).skipped_days;
-                } else if (order.notes && order.notes.includes('[SKIPPED_DAYS:')) {
-                  const match = order.notes.match(/\[SKIPPED_DAYS:\s*([0-9a-zA-Z\-, ]*)\]/i);
-                  if (match && match[1]) {
-                    orderSkippedDays = match[1].split(',').map((s) => s.trim());
-                  }
-                }
-
-                if (orderSkippedDays.length === 0 && localDates.length > 0) {
-                  orderSkippedDays = [...localDates];
-                }
-
+                // Use liveSkippedDates as real-time reactive source of truth
+                const orderSkippedDays: (string | number)[] = liveSkippedDates;
                 const activeSkippedCount = orderSkippedDays.length;
                 const goal = getCustomerGoalInfo(order, subPlanTitle);
                 const customerName = (order as any).customer_name || 'Valued VIP Member';
@@ -828,10 +814,10 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {order.status === 'accepted' ? (
-                            <span className="rounded-full px-3 py-1 text-xs font-black bg-blue-100 text-blue-900 border border-blue-300 flex items-center gap-1">
-                              <CheckCircle2 className="size-3.5 text-blue-600" />
-                              <span>Accepted</span>
+                          {order.status !== 'placed' && order.status !== 'paid' ? (
+                            <span className="rounded-full px-3 py-1 text-xs font-black bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1">
+                              <CheckCircle2 className="size-3.5 text-purple-700" />
+                              <span>Active Plan</span>
                             </span>
                           ) : (
                             <button
@@ -1001,7 +987,7 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                   const subPlanTitle =
                     order.lines && order.lines.length > 0 ? order.lines[0].name_snapshot : 'Brokole Meal Subscription Plan';
                   const goal = getCustomerGoalInfo(order, subPlanTitle);
-                  const orderSkippedDays = (order as any).skipped_days || skippedDays;
+                  const orderSkippedDays = liveSkippedDates;
 
                   return (
                     <tr key={order.id} className="hover:bg-neutral-50/80 transition-colors">
@@ -1042,10 +1028,10 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                       </td>
 
                       <td className="px-4 py-3.5 text-center">
-                        {order.status === 'accepted' ? (
-                          <span className="rounded-full px-2.5 py-0.5 text-[11px] font-black bg-blue-100 text-blue-900 border border-blue-300 inline-flex items-center gap-1">
-                            <CheckCircle2 className="size-3 text-blue-600" />
-                            <span>Accepted</span>
+                        {order.status !== 'placed' && order.status !== 'paid' ? (
+                          <span className="rounded-full px-2.5 py-0.5 text-[11px] font-black bg-purple-100 text-purple-900 border border-purple-300 inline-flex items-center gap-1">
+                            <CheckCircle2 className="size-3 text-purple-700" />
+                            <span>Active Plan</span>
                           </span>
                         ) : (
                           <button
