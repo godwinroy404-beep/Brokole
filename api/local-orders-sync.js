@@ -25,16 +25,34 @@ export default function handler(req, res) {
         globalOrders = Array.isArray(data.orders) ? data.orders : [];
       } else if (data.action === 'clear_all') {
         globalOrders = [];
+      } else if (data.action === 'delete' || data.action === 'cancel' || data.deleted) {
+        const targetId = String(data.orderId || data.order_no || data.id || '').toLowerCase();
+        if (targetId) {
+          globalOrders = globalOrders.filter(
+            (ex) =>
+              String(ex.id || ex.order_no || ex.serverId || '').toLowerCase() !== targetId &&
+              String(ex.order_no || '').toLowerCase() !== targetId
+          );
+        }
       } else if (data.order) {
         const o = data.order;
-        const oId = String(o.id || o.order_no || o.serverId || '').toLowerCase();
-        const existingIdx = globalOrders.findIndex(
-          (ex) => String(ex.id || ex.order_no || ex.serverId || '').toLowerCase() === oId
-        );
-        if (existingIdx >= 0) {
-          globalOrders[existingIdx] = { ...globalOrders[existingIdx], ...o };
+        if (o.deleted || String(o.status || '').toLowerCase() === 'cancelled') {
+          const targetId = String(o.id || o.order_no || o.serverId || '').toLowerCase();
+          globalOrders = globalOrders.filter(
+            (ex) =>
+              String(ex.id || ex.order_no || ex.serverId || '').toLowerCase() !== targetId &&
+              String(ex.order_no || '').toLowerCase() !== targetId
+          );
         } else {
-          globalOrders.unshift(o);
+          const oId = String(o.id || o.order_no || o.serverId || '').toLowerCase();
+          const existingIdx = globalOrders.findIndex(
+            (ex) => String(ex.id || ex.order_no || ex.serverId || '').toLowerCase() === oId
+          );
+          if (existingIdx >= 0) {
+            globalOrders[existingIdx] = { ...globalOrders[existingIdx], ...o };
+          } else {
+            globalOrders.unshift(o);
+          }
         }
       } else if (data.orderId && data.status) {
         const targetId = String(data.orderId).toLowerCase();

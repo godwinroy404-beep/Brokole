@@ -1,1 +1,85 @@
-[]
+[
+  {
+    "id": "BKL-SUB-574",
+    "serverId": "BKL-SUB-574",
+    "userId": "usr-1788861239344",
+    "userEmail": "admin@brokole.com",
+    "customerName": "Laborum Sequi omnis",
+    "customerPhone": "+1 (749) 295-8994",
+    "customerAddress": "Ut qui amet tempori",
+    "itemsSummary": "Brokole Shred & Gain Pro (7-Day Weekly)",
+    "itemsList": [
+      {
+        "title": "Brokole Shred & Gain Pro (7-Day Weekly)",
+        "quantity": 1,
+        "price": 2399
+      }
+    ],
+    "lines": [
+      {
+        "name_snapshot": "Brokole Shred & Gain Pro (7-Day Weekly)",
+        "quantity": 1,
+        "unit_price": "2399",
+        "line_total": "2399",
+        "notes": "Muscle Build & Hypertrophy"
+      }
+    ],
+    "notes": "Muscle Build & Hypertrophy Goal Plan | High Protein | Lunch & Dinner (12 PM & 7 PM)",
+    "skipped_days": [],
+    "channel": "subscription",
+    "totalAmount": 2399,
+    "total": 2399,
+    "proteinGrams": 95,
+    "calories": 680,
+    "status": "New Order",
+    "createdAt": "2026-09-10T07:43:03.561Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "BKL-SUB-574",
+    "customer_name": "Laborum Sequi omnis",
+    "created_at": "2026-09-10T07:43:03.561Z",
+    "placed_at": "2026-09-10T07:43:03.561Z",
+    "deleted": false
+  },
+  {
+    "id": "ORD-4293",
+    "serverId": "ORD-4293",
+    "userId": "usr-1788861239344",
+    "userEmail": "admin@brokole.com",
+    "customerName": "Laborum Sequi omnis",
+    "customerPhone": "+1 (749) 295-8994",
+    "customerAddress": "Ut qui amet tempori",
+    "itemsSummary": "Hummus & Veg Wrap x1",
+    "itemsList": [
+      {
+        "title": "Hummus & Veg Wrap",
+        "quantity": 1,
+        "price": 150
+      }
+    ],
+    "lines": [
+      {
+        "name_snapshot": "Hummus & Veg Wrap",
+        "quantity": 1,
+        "unit_price": "150",
+        "line_total": "150"
+      }
+    ],
+    "skipped_days": [],
+    "channel": "online",
+    "totalAmount": 186.5,
+    "total": 186.5,
+    "proteinGrams": 12,
+    "calories": 360,
+    "status": "New Order",
+    "createdAt": "2026-09-10T07:42:40.149Z",
+    "timeFormatted": "Just now",
+    "isNew": true,
+    "order_no": "ORD-4293",
+    "customer_name": "Laborum Sequi omnis",
+    "created_at": "2026-09-10T07:42:40.149Z",
+    "placed_at": "2026-09-10T07:42:40.149Z",
+    "notes": "",
+    "deleted": false
+  }
+]

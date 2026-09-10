@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   formatINR, nextStatus, ORDER_STATUS_LABELS, ORDER_ACTION_LABELS,
   type Order, type OrderStatus,
-  fetchCloudOrders, updateCloudOrderStatus, clearAllCloudOrders,
+  fetchCloudOrders, updateCloudOrderStatus, clearAllCloudOrders, deleteCloudOrder,
 } from '@brokole/domain';
 import { api, isApiConfigured } from '../lib/api';
 import type { AdminSession } from '../lib/useSession';
@@ -70,93 +70,133 @@ const ACTION_BUTTON_CONFIG: Partial<
   },
 };
 
-async function fetchDiskOrders(): Promise<Order[]> {
+function getDismissedSet(): Set<string> {
+  const set = new Set<string>();
+  try {
+    const subDismissed = localStorage.getItem('bkl_dismissed_sub_ids');
+    if (subDismissed) {
+      const parsed = JSON.parse(subDismissed);
+      if (Array.isArray(parsed)) parsed.forEach((id) => set.add(String(id).toLowerCase()));
+    }
+    const ordDismissed = localStorage.getItem('brokole-dismissed-orders');
+    if (ordDismissed) {
+      const parsed = JSON.parse(ordDismissed);
+      Object.keys(parsed).forEach((id) => set.add(String(id).toLowerCase()));
+    }
+  } catch {}
+  return set;
+}
+
+async function fetchDiskOrders(dismissedSet?: Set<string>): Promise<Order[]> {
   try {
     const res = await fetch('/api/local-orders-sync');
     if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data?.orders) || data.orders.length === 0) return [];
 
-    return data.orders.map((o: any) => {
-      let st = (o.status || '').toLowerCase();
-      if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
-      else if (st === 'accepted') st = 'accepted';
-      else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
-      else if (st === 'packed') st = 'packed';
-      else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
-      else if (st === 'delivered') st = 'delivered';
-      else if (st === 'cancelled' || st === 'canceled' || st === 'refunded') st = 'cancelled';
-      else st = 'placed';
+    const dismissed = dismissedSet || getDismissedSet();
 
-      return {
-        id: o.serverId || o.id,
-        order_no: o.id || o.order_no || 'BKL-DEMO-001',
-        status: st as OrderStatus,
-        business_date: new Date(o.createdAt || o.created_at || Date.now()).toISOString().split('T')[0],
-        subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : o.total ? Math.round(Number(o.total) * 0.95) : 380,
-        tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : o.total ? Math.round(Number(o.total) * 0.05) : 19,
-        delivery_fee: 0,
-        total: o.totalAmount || Number(o.total) || 399,
-        total_calories: o.calories || o.total_calories || 550,
-        total_protein: o.proteinGrams || o.total_protein || 48,
-        customer_id: o.userId || 'usr-demo',
-        placed_at: o.createdAt || o.created_at || new Date().toISOString(),
-        created_at: o.createdAt || o.created_at || new Date().toISOString(),
-        notes: o.notes || `${o.customerName || 'Customer'} (${o.customerPhone || ''}) - ${o.itemsSummary || 'Fresh Healthy Meals'}`,
-        lines: (o.itemsList || o.lines || []).map((item: any) => ({
-          name_snapshot: item.title || item.name_snapshot,
-          quantity: item.quantity,
-          unit_price: String(item.price || item.unit_price || 0),
-          line_total: String((item.price || item.unit_price || 0) * item.quantity),
-        })),
-      };
-    });
+    return data.orders
+      .filter((o: any) => {
+        if (!o || o.deleted || (o as any).deleted === true) return false;
+        const idLower = String(o.id || '').toLowerCase();
+        const noLower = String(o.order_no || '').toLowerCase();
+        if (dismissed.has(idLower) || dismissed.has(noLower)) return false;
+        const st = (o.status || '').toLowerCase();
+        if (st === 'cancelled' || st === 'canceled' || st === 'refunded') return false;
+        return true;
+      })
+      .map((o: any) => {
+        let st = (o.status || '').toLowerCase();
+        if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
+        else if (st === 'accepted') st = 'accepted';
+        else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
+        else if (st === 'packed') st = 'packed';
+        else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
+        else if (st === 'delivered') st = 'delivered';
+        else if (st === 'cancelled' || st === 'canceled' || st === 'refunded') st = 'cancelled';
+        else st = 'placed';
+
+        return {
+          id: o.serverId || o.id,
+          order_no: o.id || o.order_no || 'BKL-DEMO-001',
+          status: st as OrderStatus,
+          business_date: new Date(o.createdAt || o.created_at || Date.now()).toISOString().split('T')[0],
+          subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : o.total ? Math.round(Number(o.total) * 0.95) : 380,
+          tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : o.total ? Math.round(Number(o.total) * 0.05) : 19,
+          delivery_fee: 0,
+          total: o.totalAmount || Number(o.total) || 399,
+          total_calories: o.calories || o.total_calories || 550,
+          total_protein: o.proteinGrams || o.total_protein || 48,
+          customer_id: o.userId || 'usr-demo',
+          placed_at: o.createdAt || o.created_at || new Date().toISOString(),
+          created_at: o.createdAt || o.created_at || new Date().toISOString(),
+          notes: o.notes || `${o.customerName || 'Customer'} (${o.customerPhone || ''}) - ${o.itemsSummary || 'Fresh Healthy Meals'}`,
+          lines: (o.itemsList || o.lines || []).map((item: any) => ({
+            name_snapshot: item.title || item.name_snapshot,
+            quantity: item.quantity,
+            unit_price: String(item.price || item.unit_price || 0),
+            line_total: String((item.price || item.unit_price || 0) * item.quantity),
+          })),
+        };
+      });
   } catch {
     return [];
   }
 }
 
-function getFallbackOrders(): Order[] {
+function getFallbackOrders(dismissedSet?: Set<string>): Order[] {
   try {
     const raw = localStorage.getItem('brokole-orders-storage');
     if (raw) {
       const parsed = JSON.parse(raw);
       const storeOrders = parsed?.state?.orders;
       if (Array.isArray(storeOrders) && storeOrders.length > 0) {
-        return storeOrders.map((o: any) => {
-          let st = (o.status || '').toLowerCase();
-          if (st === 'delivered') st = 'delivered';
-          else if (st === 'cancelled' || st === 'canceled') st = 'cancelled';
-          else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
-          else if (st === 'packed') st = 'packed';
-          else if (st === 'in_kitchen' || st === 'in kitchen') st = 'in_kitchen';
-          else if (st === 'accepted') st = 'accepted';
-          else if (st === 'preparing') st = 'in_kitchen';
-          else st = 'placed';
+        const dismissed = dismissedSet || getDismissedSet();
+        return storeOrders
+          .filter((o: any) => {
+            if (!o || o.deleted || (o as any).deleted === true) return false;
+            const idLower = String(o.id || '').toLowerCase();
+            const noLower = String(o.serverId || '').toLowerCase();
+            if (dismissed.has(idLower) || dismissed.has(noLower)) return false;
+            const st = (o.status || '').toLowerCase();
+            if (st === 'cancelled' || st === 'canceled' || st === 'refunded') return false;
+            return true;
+          })
+          .map((o: any) => {
+            let st = (o.status || '').toLowerCase();
+            if (st === 'delivered') st = 'delivered';
+            else if (st === 'cancelled' || st === 'canceled') st = 'cancelled';
+            else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
+            else if (st === 'packed') st = 'packed';
+            else if (st === 'in_kitchen' || st === 'in kitchen') st = 'in_kitchen';
+            else if (st === 'accepted') st = 'accepted';
+            else if (st === 'preparing') st = 'in_kitchen';
+            else st = 'placed';
 
-          return {
-            id: o.serverId || o.id,
-            order_no: o.id || 'BKL-DEMO-001',
-            status: st as OrderStatus,
-            business_date: new Date(o.createdAt || Date.now()).toISOString().split('T')[0],
-            subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : 380,
-            tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : 19,
-            delivery_fee: 0,
-            total: o.totalAmount || 399,
-            total_calories: o.calories || 550,
-            total_protein: o.proteinGrams || 48,
-            customer_id: o.userId || 'usr-demo',
-            placed_at: o.createdAt || new Date().toISOString(),
-            created_at: o.createdAt || new Date().toISOString(),
-            notes: `${o.customerName || 'Customer'} (${o.customerPhone || ''}) - ${o.itemsSummary || 'High Protein Meals'}`,
-            lines: (o.itemsList || []).map((item: any) => ({
-              name_snapshot: item.title,
-              quantity: item.quantity,
-              unit_price: String(item.price),
-              line_total: String(item.price * item.quantity),
-            })),
-          };
-        });
+            return {
+              id: o.serverId || o.id,
+              order_no: o.id || 'BKL-DEMO-001',
+              status: st as OrderStatus,
+              business_date: new Date(o.createdAt || Date.now()).toISOString().split('T')[0],
+              subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : 380,
+              tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : 19,
+              delivery_fee: 0,
+              total: o.totalAmount || 399,
+              total_calories: o.calories || 550,
+              total_protein: o.proteinGrams || 48,
+              customer_id: o.userId || 'usr-demo',
+              placed_at: o.createdAt || new Date().toISOString(),
+              created_at: o.createdAt || new Date().toISOString(),
+              notes: `${o.customerName || 'Customer'} (${o.customerPhone || ''}) - ${o.itemsSummary || 'High Protein Meals'}`,
+              lines: (o.itemsList || []).map((item: any) => ({
+                name_snapshot: item.title,
+                quantity: item.quantity,
+                unit_price: String(item.price),
+                line_total: String(item.price * item.quantity),
+              })),
+            };
+          });
       }
     }
   } catch {
@@ -357,18 +397,19 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
   const fetchOrders = useCallback(async (isManual = false) => {
     if (isManual) setIsSyncing(true);
 
+    const dismissedSet = getDismissedSet();
     const orderMap = new Map<string, Order>();
 
     // 1. Fallback base orders first
-    for (const o of getFallbackOrders()) {
-      const key = String(o.id || o.order_no).toLowerCase();
+    for (const o of getFallbackOrders(dismissedSet)) {
+      const key = String(o.order_no || o.id).toLowerCase();
       orderMap.set(key, o);
     }
 
     // 2. Disk sync orders
-    const disk = await fetchDiskOrders();
+    const disk = await fetchDiskOrders(dismissedSet);
     for (const o of disk) {
-      const key = String(o.id || o.order_no).toLowerCase();
+      const key = String(o.order_no || o.id).toLowerCase();
       orderMap.set(key, o);
     }
 
@@ -377,7 +418,15 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
       const cloudData = await fetchCloudOrders();
       if (Array.isArray(cloudData) && cloudData.length > 0) {
         cloudData
-          .filter((o) => !o.deleted)
+          .filter((o) => {
+            if (!o || o.deleted || (o as any).deleted === true) return false;
+            const idLower = String(o.id || '').toLowerCase();
+            const noLower = String(o.order_no || '').toLowerCase();
+            if (dismissedSet.has(idLower) || dismissedSet.has(noLower)) return false;
+            const st = (o.status || '').toLowerCase();
+            if (st === 'cancelled' || st === 'canceled' || st === 'refunded') return false;
+            return true;
+          })
           .forEach((o) => {
             let st = (o.status || '').toLowerCase();
             if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
@@ -391,7 +440,7 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
 
             const id = o.serverId || o.id;
             const order_no = o.order_no || o.id || 'BKL-DEMO-001';
-            const key = String(id || order_no).toLowerCase();
+            const key = String(order_no || id).toLowerCase();
 
             orderMap.set(key, {
               id,
@@ -425,8 +474,10 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
         const { orders: serverOrders } = await api.get<{ orders: Order[] }>('/orders');
         if (serverOrders && serverOrders.length > 0) {
           for (const o of serverOrders) {
-            const key = String(o.id || o.order_no).toLowerCase();
-            orderMap.set(key, o);
+            const key = String(o.order_no || o.id).toLowerCase();
+            if (!dismissedSet.has(key) && o.status !== 'cancelled' && o.status !== 'refunded') {
+              orderMap.set(key, o);
+            }
           }
         }
       } catch {}
@@ -437,9 +488,18 @@ export function OrdersScreen({ session }: { session: AdminSession }) {
     );
 
     setOrders((prev) => {
-      const prevSig = prev.map((o) => `${o.id}:${o.status}:${o.total}`).join('|');
-      const nextSig = loaded.map((o) => `${o.id}:${o.status}:${o.total}`).join('|');
-      if (prevSig === nextSig) return prev;
+      if (prev.length === loaded.length) {
+        const isIdentical = prev.every((p, idx) => {
+          const l = loaded[idx];
+          return (
+            p.id === l.id &&
+            p.order_no === l.order_no &&
+            p.status === l.status &&
+            p.total === l.total
+          );
+        });
+        if (isIdentical) return prev;
+      }
       return loaded;
     });
 
@@ -549,7 +609,7 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
     window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       const bc = new BroadcastChannel('brokole-live-sync-channel');
-      bc.postMessage({ type: 'order_status_updated', id: orderNoOrId, status: toDbStatus });
+      bc.postMessage({ type: 'order_status_updated', orderId: orderNoOrId, id: orderNoOrId, status: toDbStatus });
       bc.close();
     }
   } catch {}
@@ -559,7 +619,18 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
     const to = nextStatus(order.status);
     if (!to) return;
 
+    const orderId = order.order_no || order.id;
     setWorking(order.id);
+
+    // Instant optimistic update
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === order.id || o.order_no === order.order_no
+          ? { ...o, status: to }
+          : o
+      )
+    );
+
     if (isApiConfigured) {
       try {
         await api.patch(`/orders/${order.id}/status`, { status: to });
@@ -568,7 +639,7 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
       }
     }
 
-    updateLocalOrderStatus(order.order_no || order.id, to);
+    updateLocalOrderStatus(orderId, to);
 
     if (to === 'delivered') {
       toast.success(`Order ${order.order_no} marked Delivered! 🎉`, {
@@ -579,8 +650,8 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
         description: 'Status updated to Out for Delivery.',
       });
     } else if (to === 'in_kitchen') {
-      toast.success(`Order ${order.order_no} cooking in kitchen 🍳`, {
-        description: 'Status updated to Preparing.',
+      toast.success(`Order ${order.order_no} accepted & cooking in kitchen 🍳`, {
+        description: 'Customer live tracking updated to Preparing.',
       });
     } else {
       toast.success(`${order.order_no} → ${ORDER_STATUS_LABELS[to]}`);
@@ -591,22 +662,72 @@ function updateLocalOrderStatus(orderNoOrId: string, toDbStatus: OrderStatus) {
   }
 
   async function cancelOrder(order: Order) {
-    if (!window.confirm(`Force cancel order ${order.order_no} for testing?`)) return;
+    if (!window.confirm(`Delete & cancel order ${order.order_no}? This will remove it from the customer view as well.`)) return;
+
+    const orderId = order.id;
+    const orderNo = order.order_no || order.id;
 
     setWorking(order.id);
-    if (isApiConfigured) {
-      try {
-        await api.patch(`/orders/${order.id}/status`, { status: 'cancelled' });
-      } catch {
-        /* ignore */
-      }
+
+    // Remove from state immediately
+    setOrders((prev) => prev.filter((o) => o.id !== orderId && o.order_no !== orderNo && o.id !== orderNo));
+
+    // 1. Delete from cloud store
+    void deleteCloudOrder(orderId);
+    if (orderNo && orderNo !== orderId) {
+      void deleteCloudOrder(orderNo);
     }
 
-    updateLocalOrderStatus(order.order_no || order.id, 'cancelled');
-    toast.success(`Order ${order.order_no} CANCELLED`, {
-      description: 'Customer tracker and kitchen board updated.',
+    // 2. Add to dismissed IDs
+    try {
+      const subDismissed = localStorage.getItem('bkl_dismissed_sub_ids');
+      const parsedSub = subDismissed ? JSON.parse(subDismissed) : [];
+      const nextSub = [...new Set([...parsedSub, orderId, orderNo])];
+      localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(nextSub));
+
+      const ordDismissed = localStorage.getItem('brokole-dismissed-orders');
+      const parsedOrd = ordDismissed ? JSON.parse(ordDismissed) : {};
+      parsedOrd[orderId] = Date.now();
+      parsedOrd[orderNo] = Date.now();
+      localStorage.setItem('brokole-dismissed-orders', JSON.stringify(parsedOrd));
+    } catch {}
+
+    // 3. Post delete action to local sync
+    try {
+      await fetch('/api/local-orders-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          orderId,
+          order_no: orderNo,
+        }),
+      });
+    } catch {}
+
+    if (isApiConfigured) {
+      try {
+        await api.patch(`/orders/${encodeURIComponent(orderId)}/status`, { status: 'cancelled' });
+      } catch {}
+    }
+
+    updateLocalOrderStatus(orderNo, 'cancelled');
+
+    // 4. Broadcast deletion to all browser tabs and customer live tracker
+    try {
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('brokole-live-sync-channel');
+        bc.postMessage({ type: 'order_deleted', orderId, id: orderId, order_no: orderNo });
+        bc.postMessage({ type: 'order_status_updated', orderId, id: orderId, status: 'cancelled' });
+        bc.close();
+      }
+    } catch {}
+
+    toast.success(`Order ${orderNo} deleted & removed from customer app`, {
+      description: 'Order purged from live board and customer account.',
     });
-    await fetchOrders(false);
     setWorking(null);
   }
 

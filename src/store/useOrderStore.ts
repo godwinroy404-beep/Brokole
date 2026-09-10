@@ -559,11 +559,12 @@ export const useOrderStore = create<OrderState>()(
               map.delete(key);
               continue;
             }
-            if (dismissedSet.has(key) || (ord.id && dismissedSet.has(ord.id)) || (ord.serverId && dismissedSet.has(ord.serverId))) {
-              // Dismissed/deleted locally - check if cancelled or remove
-              if (ord.status === 'Cancelled' || (ord as any).deleted) {
-                map.delete(key);
-              }
+            if (
+              dismissedSet.has(key) ||
+              (ord.id && dismissedSet.has(ord.id)) ||
+              (ord.serverId && dismissedSet.has(ord.serverId))
+            ) {
+              map.delete(key);
             }
           }
 
@@ -617,6 +618,40 @@ export const useOrderStore = create<OrderState>()(
             bc.onmessage = (ev) => {
               if (ev.data?.type === 'ORDERS_CLEARED') {
                 set({ orders: [], latestPlacedOrder: null });
+              } else if (ev.data?.type === 'order_deleted' && ev.data?.orderId) {
+                const delId = String(ev.data.orderId).toLowerCase();
+                set((s) => ({
+                  orders: s.orders.filter(
+                    (o) => (o.id || '').toLowerCase() !== delId && (o.serverId || '').toLowerCase() !== delId
+                  ),
+                  latestPlacedOrder:
+                    (s.latestPlacedOrder?.id || '').toLowerCase() === delId ||
+                    (s.latestPlacedOrder?.serverId || '').toLowerCase() === delId
+                      ? null
+                      : s.latestPlacedOrder,
+                }));
+                try {
+                  const raw = localStorage.getItem('brokole-dismissed-orders');
+                  const parsed = raw ? JSON.parse(raw) : {};
+                  parsed[ev.data.orderId] = Date.now();
+                  localStorage.setItem('brokole-dismissed-orders', JSON.stringify(parsed));
+                } catch {}
+              } else if (ev.data?.type === 'order_status_updated' && ev.data?.orderId && ev.data?.status) {
+                const ordId = String(ev.data.orderId).toLowerCase();
+                const newSt = mapDbStatus(ev.data.status);
+                set((s) => ({
+                  orders: s.orders.map((o) =>
+                    (o.id || '').toLowerCase() === ordId || (o.serverId || '').toLowerCase() === ordId
+                      ? { ...o, status: newSt, isNew: false }
+                      : o
+                  ),
+                  latestPlacedOrder:
+                    s.latestPlacedOrder &&
+                    ((s.latestPlacedOrder.id || '').toLowerCase() === ordId ||
+                      (s.latestPlacedOrder.serverId || '').toLowerCase() === ordId)
+                      ? { ...s.latestPlacedOrder, status: newSt, isNew: false }
+                      : s.latestPlacedOrder,
+                }));
               } else {
                 void get().loadMyOrders();
               }

@@ -176,11 +176,10 @@ export const OrderStatusBanner: React.FC = () => {
       if (isSub) {
         // 1. Must NOT be skipped today
         const isSkippedToday = localSkips.includes(todayIso);
-
         if (isSkippedToday) return false;
 
-        // 2. Only show subscription deliveries when kitchen starts cooking / delivering
-        if (!isCookingOrDelivering(o.status)) return false;
+        // 2. Show if placed today/recent OR when kitchen is actively preparing/delivering today's meal
+        if (!isTodayOrRecentOrder(o) && !isCookingOrDelivering(o.status)) return false;
 
         return true;
       } else {

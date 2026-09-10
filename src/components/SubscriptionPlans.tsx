@@ -476,7 +476,7 @@ export const SubscriptionPlans: React.FC = () => {
         calories: plan.caloriesPerDay,
         channel: 'subscription',
         notes: subNotes,
-        status: 'Preparing',
+        status: 'New Order',
       });
 
       toast.success(
