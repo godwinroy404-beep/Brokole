@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { fetchProducts, Product } from '../lib/shopify';
 import { useProductStore } from '../store/useProductStore';
 import { ProductCard } from '../components/ProductCard';
 import { CATEGORIES } from '../components/CategoryStrip';
-import { Utensils, Sparkles, Filter, ArrowUpDown, LayoutGrid, List, Flame, ChefHat, Calendar, Search, ShieldCheck } from 'lucide-react';
+import { Utensils, Sparkles, Filter, ArrowUpDown, LayoutGrid, List, Flame, ChefHat, Calendar, Search, ShieldCheck, ChevronDown, Check } from 'lucide-react';
 
 export const Route = createFileRoute('/menu')({
   loader: async () => {
@@ -22,6 +22,14 @@ export const Route = createFileRoute('/menu')({
 
 type SortOption = 'featured' | 'price-asc' | 'price-desc' | 'protein-desc' | 'calories-asc';
 
+const SORT_OPTIONS: { id: SortOption; label: string }[] = [
+  { id: 'featured', label: 'Featured Dishes' },
+  { id: 'protein-desc', label: 'Highest Protein' },
+  { id: 'calories-asc', label: 'Lowest Calories' },
+  { id: 'price-asc', label: 'Price: Low to High' },
+  { id: 'price-desc', label: 'Price: High to Low' },
+];
+
 function MenuPage() {
   const { products: initialProducts } = Route.useLoaderData();
   const storeProducts = useProductStore((state) => state.products);
@@ -31,9 +39,22 @@ function MenuPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState<SortOption>('featured');
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
   const [highProteinOnly, setHighProteinOnly] = useState(false);
   const [lowCalOnly, setLowCalOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Close sort dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (sortRef.current && !sortRef.current.contains(event.target as Node)) {
+        setIsSortOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
@@ -114,129 +135,6 @@ function MenuPage() {
         </div>
       </div>
 
-      {/* Control Bar: Sorting, View Modes, Macro Filters & Category Tabs */}
-      <div className="space-y-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-4 shadow-xs carved-box">
-        {/* Top Control Row: Sort, View Modes & Macro Filters */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          {/* Controls: Sorting & View Mode */}
-          <div className="flex items-center gap-3 shrink-0">
-            {/* Sort Dropdown */}
-            <div className="flex items-center gap-2 bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-2xl px-3 py-2 text-xs font-bold text-[var(--color-text-main)]">
-              <ArrowUpDown className="w-4 h-4 text-[var(--color-primary)]" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="bg-transparent focus:outline-none cursor-pointer text-xs font-extrabold"
-              >
-                <option value="featured">Featured Dishes</option>
-                <option value="protein-desc">Highest Protein</option>
-                <option value="calories-asc">Lowest Calories</option>
-                <option value="price-asc">Price: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
-              </select>
-            </div>
-
-            {/* Layout Toggle */}
-            <div className="flex items-center bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-2xl p-1">
-              <button
-                onClick={() => setViewMode('grid')}
-                aria-label="Grid view"
-                className={`p-2 rounded-xl transition-all cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-                }`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                aria-label="List view"
-                className={`p-2 rounded-xl transition-all cursor-pointer ${
-                  viewMode === 'list'
-                    ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-                }`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Macro Filter Badges (Moved to top row) */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-[var(--color-text-muted)] font-bold flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5 text-[var(--color-primary)]" />
-              Macro Filters:
-            </span>
-
-            <button
-              onClick={() => setHighProteinOnly(!highProteinOnly)}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                highProteinOnly
-                  ? 'bg-amber-500/10 border-amber-500 text-amber-600 font-extrabold'
-                  : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-amber-400'
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5 text-amber-500" />
-              <span>High Protein (&gt;30g)</span>
-            </button>
-
-            <button
-              onClick={() => setLowCalOnly(!lowCalOnly)}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                lowCalOnly
-                  ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 font-extrabold'
-                  : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-emerald-400'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Low Calorie (&lt;400 kcal)</span>
-            </button>
-
-            {(highProteinOnly || lowCalOnly || selectedCategory !== 'All' || searchQuery) && (
-              <button
-                onClick={() => {
-                  setHighProteinOnly(false);
-                  setLowCalOnly(false);
-                  setSelectedCategory('All');
-                  setSearchQuery('');
-                }}
-                className="text-xs font-bold text-[var(--color-primary)] hover:underline ml-auto"
-              >
-                Reset Filters
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Category Pills Strip */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2 border-t border-[var(--color-border-subtle)]">
-          {CATEGORIES.map((cat) => {
-            const Icon = cat.icon;
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  if (cat.id === 'Custom Bowl') return;
-                  if (cat.id === 'Subscriptions') return;
-                  setSelectedCategory(cat.id);
-                }}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer border ${
-                  isSelected
-                    ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] border-[var(--color-primary)] shadow-sm'
-                    : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:border-[var(--color-primary-muted)] hover:text-[var(--color-text-main)]'
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-[var(--color-accent)]' : 'text-[var(--color-primary)]'}`} />
-                <span>{cat.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Promos Grid: DIY Bowl & Subscription quick entry */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-4 flex items-center justify-between shadow-xs carved-box">
@@ -273,6 +171,147 @@ function MenuPage() {
           >
             Subscribe
           </Link>
+        </div>
+      </div>
+
+      {/* Control Bar: Sorting, View Modes, Macro Filters & Category Tabs */}
+      <div className="space-y-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-4 shadow-xs carved-box">
+        {/* Top Control Row: Sort, View Modes & Macro Filters */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          {/* Controls: Sorting & View Mode */}
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Custom Styled Sort Dropdown */}
+            <div className="relative z-30" ref={sortRef}>
+              <button
+                type="button"
+                onClick={() => setIsSortOpen(!isSortOpen)}
+                className="flex items-center gap-2 bg-[var(--color-surface-hover)] border border-[var(--color-border)] hover:border-[var(--color-primary-muted)] rounded-2xl px-3 py-2 text-xs font-extrabold text-[var(--color-text-main)] transition-all cursor-pointer carved-btn"
+              >
+                <ArrowUpDown className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+                <span>{SORT_OPTIONS.find((o) => o.id === sortBy)?.label || 'Featured Dishes'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-[var(--color-text-muted)] transition-transform duration-200 ${isSortOpen ? 'rotate-180 text-[var(--color-primary)]' : ''}`} />
+              </button>
+
+              {isSortOpen && (
+                <div className="absolute left-0 top-full mt-2 w-48 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 carved-box">
+                  {SORT_OPTIONS.map((option) => {
+                    const isSelected = sortBy === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => {
+                          setSortBy(option.id);
+                          setIsSortOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                          isSelected
+                            ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)] font-extrabold'
+                            : 'text-[var(--color-text-main)] hover:bg-[var(--color-surface-hover)]'
+                        }`}
+                      >
+                        <span>{option.label}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Layout Toggle */}
+            <div className="flex items-center bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-2xl p-1">
+              <button
+                onClick={() => setViewMode('grid')}
+                aria-label="Grid view"
+                className={`p-2 rounded-xl transition-all cursor-pointer ${viewMode === 'grid'
+                    ? 'bg-[var(--color-primary)] text-white shadow-xs'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                  }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                aria-label="List view"
+                className={`p-2 rounded-xl transition-all cursor-pointer ${viewMode === 'list'
+                    ? 'bg-[var(--color-primary)] text-white shadow-xs'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                  }`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Macro Filter Badges (Moved to top row) */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-muted)] font-bold flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+              Macro Filters:
+            </span>
+
+            <button
+              onClick={() => setHighProteinOnly(!highProteinOnly)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${highProteinOnly
+                  ? 'bg-amber-500/10 border-amber-500 text-amber-600 font-extrabold'
+                  : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-amber-400'
+                }`}
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-500" />
+              <span>High Protein (&gt;30g)</span>
+            </button>
+
+            <button
+              onClick={() => setLowCalOnly(!lowCalOnly)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${lowCalOnly
+                  ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 font-extrabold'
+                  : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-emerald-400'
+                }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Low Calorie (&lt;400 kcal)</span>
+            </button>
+
+            {(highProteinOnly || lowCalOnly || selectedCategory !== 'All' || searchQuery) && (
+              <button
+                onClick={() => {
+                  setHighProteinOnly(false);
+                  setLowCalOnly(false);
+                  setSelectedCategory('All');
+                  setSearchQuery('');
+                }}
+                className="text-xs font-bold text-[var(--color-primary)] hover:underline ml-auto"
+              >
+                Reset Filters
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Category Pills Strip */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2 border-t border-[var(--color-border-subtle)]">
+          {CATEGORIES.map((cat) => {
+            const Icon = cat.icon;
+            const isSelected = selectedCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  if (cat.id === 'Custom Bowl') return;
+                  if (cat.id === 'Subscriptions') return;
+                  setSelectedCategory(cat.id);
+                }}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer border ${isSelected
+                    ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] border-[var(--color-primary)] shadow-sm'
+                    : 'bg-[var(--color-surface)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:border-[var(--color-primary-muted)] hover:text-[var(--color-text-main)]'
+                  }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-[var(--color-accent)]' : 'text-[var(--color-primary)]'}`} />
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
