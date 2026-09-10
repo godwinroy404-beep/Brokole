@@ -7,6 +7,14 @@ import fs from 'fs'
 
 function localOrdersSyncPlugin() {
   const filePath = path.resolve(__dirname, '.brokole-local-orders.json')
+  let memoryOrders: any[] = []
+  if (fs.existsSync(filePath)) {
+    try {
+      memoryOrders = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    } catch {
+      memoryOrders = []
+    }
+  }
 
   return {
     name: 'local-orders-sync-plugin',
@@ -28,14 +36,7 @@ function localOrdersSyncPlugin() {
           req.on('end', () => {
             try {
               const data = JSON.parse(body)
-              let current: any[] = []
-              if (fs.existsSync(filePath)) {
-                try {
-                  current = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
-                } catch {
-                  current = []
-                }
-              }
+              let current = [...memoryOrders]
               if (data.action === 'save_all') {
                 current = data.orders || []
               } else if (data.action === 'delete' || data.action === 'cancel') {
@@ -84,7 +85,10 @@ function localOrdersSyncPlugin() {
                   current.unshift(data.order)
                 }
               }
-              fs.writeFileSync(filePath, JSON.stringify(current, null, 2))
+              memoryOrders = current
+              try {
+                fs.writeFileSync(filePath, JSON.stringify(current, null, 2))
+              } catch {}
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ ok: true, orders: current }))
             } catch (err: any) {
@@ -96,16 +100,8 @@ function localOrdersSyncPlugin() {
         }
 
         if (req.method === 'GET') {
-          let current: any[] = []
-          if (fs.existsSync(filePath)) {
-            try {
-              current = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
-            } catch {
-              current = []
-            }
-          }
           res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ ok: true, orders: current }))
+          res.end(JSON.stringify({ ok: true, orders: memoryOrders }))
           return
         }
       })
@@ -115,6 +111,14 @@ function localOrdersSyncPlugin() {
 
 function localPowerBowlSyncPlugin() {
   const filePath = path.resolve(__dirname, '.brokole-local-power-bowl.json')
+  let memoryIngredients: any[] = []
+  if (fs.existsSync(filePath)) {
+    try {
+      memoryIngredients = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    } catch {
+      memoryIngredients = []
+    }
+  }
 
   return {
     name: 'local-power-bowl-sync-plugin',
@@ -137,7 +141,10 @@ function localPowerBowlSyncPlugin() {
             try {
               const data = JSON.parse(body)
               const ingredients = data.ingredients || []
-              fs.writeFileSync(filePath, JSON.stringify(ingredients, null, 2))
+              memoryIngredients = ingredients
+              try {
+                fs.writeFileSync(filePath, JSON.stringify(ingredients, null, 2))
+              } catch {}
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ ok: true, ingredients }))
             } catch (err: any) {
@@ -149,16 +156,8 @@ function localPowerBowlSyncPlugin() {
         }
 
         if (req.method === 'GET') {
-          let ingredients: any[] = []
-          if (fs.existsSync(filePath)) {
-            try {
-              ingredients = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
-            } catch {
-              ingredients = []
-            }
-          }
           res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ ok: true, ingredients }))
+          res.end(JSON.stringify({ ok: true, ingredients: memoryIngredients }))
           return
         }
       })
@@ -181,11 +180,20 @@ export default defineConfig({
     alias: {
       '~': path.resolve(__dirname, './src'),
       '@': path.resolve(__dirname, './src'),
+      '@brokole/domain': path.resolve(__dirname, './packages/domain/src/index.ts'),
     },
   },
   server: {
     // Pinned so the storefront is always 5174 and the admin console 5175.
     port: 5174,
     strictPort: true,
+    watch: {
+      ignored: [
+        '**/.brokole-local-*.json',
+        '**/.brokole-*.json',
+        '**/node_modules/**',
+        '**/.git/**',
+      ],
+    },
   },
 })

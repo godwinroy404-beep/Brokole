@@ -4,6 +4,7 @@ import { fetchMyOrders, cancelOrderApi } from '../lib/menu';
 import { isApiConfigured } from '../lib/api';
 import { useAuthStore } from './useAuthStore';
 import { pushLocalOrderSync, fetchLocalSyncOrders } from '../lib/localSync';
+import { pushCloudOrder, updateCloudOrderStatus, fetchCloudOrders } from '../lib/cloudOrderSync';
 
 export type OrderStatus =
   | 'New Order'
@@ -85,6 +86,7 @@ interface OrderState {
   resetOrders: () => void;
 
   cancelUserOrder: (orderId: string, reason?: string) => Promise<{ ok: boolean; error?: string }>;
+  forceCancelUserOrder: (orderId: string, reason?: string) => Promise<{ ok: boolean; error?: string }>;
 
   /** Loads this customer's real orders. RLS guarantees they can only be theirs. */
   loadMyOrders: () => Promise<void>;
@@ -147,6 +149,7 @@ export const useOrderStore = create<OrderState>()(
         }));
 
         void pushLocalOrderSync(newOrder);
+        void pushCloudOrder(newOrder);
 
         return newOrder;
       },
@@ -170,6 +173,9 @@ export const useOrderStore = create<OrderState>()(
         const target = get().orders.find((o) => o.id === orderId || o.serverId === orderId);
         if (target) {
           void pushLocalOrderSync({ ...target, status });
+          void updateCloudOrderStatus(orderId, status);
+        } else {
+          void updateCloudOrderStatus(orderId, status);
         }
 
         if (isApiConfigured) {
@@ -222,23 +228,80 @@ export const useOrderStore = create<OrderState>()(
         }
 
         const currentStatus = (order.status || '').toLowerCase();
-        if (
-          currentStatus.includes('packed') ||
-          currentStatus.includes('out for delivery') ||
-          currentStatus.includes('delivered') ||
-          currentStatus.includes('cancelled') ||
-          currentStatus.includes('canceled')
-        ) {
-          return { ok: false, error: 'Order cannot be cancelled once it is packed or out for delivery' };
+        if (currentStatus.includes('delivered') || currentStatus.includes('cancelled') || currentStatus.includes('canceled')) {
+          return { ok: false, error: 'Order is already completed or cancelled.' };
         }
 
+        if (currentStatus.includes('in_kitchen') || currentStatus.includes('preparing') || currentStatus.includes('packed') || currentStatus.includes('out for delivery')) {
+          return {
+            ok: false,
+            error: 'Kitchen has already started preparing this meal. Type "CANCEL" to force override for testing.',
+          };
+        }
+
+        const id = order.id || orderId;
+
         // Cancel locally in Zustand immediately
-        get().updateOrderStatus(order.id, 'Cancelled');
+        get().updateOrderStatus(id, 'Cancelled');
+        get().clearLatestPlacedOrder();
+
+        // Write to dismissed storage immediately
+        try {
+          const raw = localStorage.getItem('brokole-dismissed-orders');
+          const parsed = raw ? JSON.parse(raw) : {};
+          parsed[id] = Date.now();
+          if (order.serverId) parsed[order.serverId] = Date.now();
+          localStorage.setItem('brokole-dismissed-orders', JSON.stringify(parsed));
+        } catch { }
+
+        // Update cloud sync
+        void updateCloudOrderStatus(id, 'cancelled');
 
         // If backend API is configured, notify it in background without failing UI
         if (isApiConfigured) {
-          const key = order.serverId || order.id;
+          const key = order.serverId || id;
           void cancelOrderApi(key, reason).catch(() => { });
+        }
+
+        return { ok: true };
+      },
+
+      forceCancelUserOrder: async (orderId, reason) => {
+        const state = get();
+        let order = state.orders.find((o) => o.id === orderId || o.serverId === orderId);
+
+        if (!order && state.latestPlacedOrder && (state.latestPlacedOrder.id === orderId || state.latestPlacedOrder.serverId === orderId)) {
+          order = state.latestPlacedOrder;
+        }
+
+        if (!order) {
+          const lower = (orderId || '').toLowerCase();
+          order = state.orders.find(
+            (o) => (o.id || '').toLowerCase() === lower || (o.serverId || '').toLowerCase() === lower
+          );
+        }
+
+        const id = order?.id || orderId;
+
+        // Force cancel locally in Zustand immediately no matter what status
+        get().updateOrderStatus(id, 'Cancelled');
+        get().clearLatestPlacedOrder();
+
+        // Write to dismissed storage immediately
+        try {
+          const raw = localStorage.getItem('brokole-dismissed-orders');
+          const parsed = raw ? JSON.parse(raw) : {};
+          parsed[id] = Date.now();
+          if (order?.serverId) parsed[order.serverId] = Date.now();
+          localStorage.setItem('brokole-dismissed-orders', JSON.stringify(parsed));
+        } catch { }
+
+        // Update cloud and disk sync immediately
+        void updateCloudOrderStatus(id, 'cancelled');
+
+        if (isApiConfigured) {
+          const key = order?.serverId || id;
+          void cancelOrderApi(key, reason || 'Cancelled by customer via force CANCEL').catch(() => { });
         }
 
         return { ok: true };
@@ -301,22 +364,54 @@ export const useOrderStore = create<OrderState>()(
         let diskOrders: Order[] = [];
         try {
           const rawDisk = await fetchLocalSyncOrders();
+          const currentUser = useAuthStore.getState().user;
+          const currentUserId = currentUser?.id ? String(currentUser.id).toLowerCase() : '';
+          const currentUserEmail = currentUser?.email ? String(currentUser.email).toLowerCase() : '';
+          const currentUserName = currentUser?.name ? String(currentUser.name).toLowerCase().trim() : '';
+          const currentUserPhone = currentUser?.phone ? String(currentUser.phone).replace(/\D/g, '') : '';
+
+          const existingLocalIds = new Set(
+            (get().orders || []).map((o) => String(o.id || o.serverId || '').toLowerCase())
+          );
+          if (get().latestPlacedOrder?.id) {
+            existingLocalIds.add(String(get().latestPlacedOrder!.id).toLowerCase());
+          }
+
           if (Array.isArray(rawDisk)) {
-            diskOrders = rawDisk.map((diskOrd: any) => ({
-              id: diskOrd.id || diskOrd.order_no || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-              serverId: diskOrd.serverId || diskOrd.id,
-              customerName: diskOrd.customerName || diskOrd.customer_name || 'Customer',
-              customerPhone: diskOrd.customerPhone || diskOrd.customer_phone || '+91 98765 00000',
-              customerAddress: diskOrd.customerAddress || diskOrd.customer_address || 'Delivery Address',
-              itemsSummary: diskOrd.itemsSummary || 'Fresh Healthy Bowl',
-              itemsList: diskOrd.itemsList || [],
-              totalAmount: diskOrd.totalAmount || diskOrd.total || 399,
-              proteinGrams: diskOrd.proteinGrams || diskOrd.total_protein || 45,
-              calories: diskOrd.calories || diskOrd.total_calories || 520,
-              status: diskOrd.status || 'New Order',
-              createdAt: diskOrd.createdAt || diskOrd.created_at || new Date().toISOString(),
-              timeFormatted: 'Just now',
-            }));
+            diskOrders = rawDisk
+              .filter((diskOrd: any) => {
+                const ordId = String(diskOrd.id || diskOrd.order_no || diskOrd.serverId || '').toLowerCase();
+                const ordUserId = String(diskOrd.userId || '').toLowerCase();
+                const ordEmail = String(diskOrd.userEmail || '').toLowerCase();
+                const ordName = String(diskOrd.customerName || diskOrd.customer_name || '').toLowerCase().trim();
+                const ordPhone = String(diskOrd.customerPhone || diskOrd.customer_phone || '').replace(/\D/g, '');
+
+                // 1. Matched by session/local ID
+                if (existingLocalIds.has(ordId)) return true;
+
+                // 2. Matched by user credentials
+                if (currentUserId && ordUserId && ordUserId === currentUserId) return true;
+                if (currentUserEmail && ordEmail && ordEmail === currentUserEmail) return true;
+                if (currentUserPhone && ordPhone && ordPhone.length >= 7 && currentUserPhone.includes(ordPhone)) return true;
+                if (currentUserName && ordName && ordName.length > 2 && ordName === currentUserName) return true;
+
+                return false;
+              })
+              .map((diskOrd: any) => ({
+                id: diskOrd.id || diskOrd.order_no || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+                serverId: diskOrd.serverId || diskOrd.id,
+                customerName: diskOrd.customerName || diskOrd.customer_name || 'Customer',
+                customerPhone: diskOrd.customerPhone || diskOrd.customer_phone || '+91 98765 00000',
+                customerAddress: diskOrd.customerAddress || diskOrd.customer_address || 'Delivery Address',
+                itemsSummary: diskOrd.itemsSummary || 'Fresh Healthy Bowl',
+                itemsList: diskOrd.itemsList || [],
+                totalAmount: diskOrd.totalAmount || diskOrd.total || 399,
+                proteinGrams: diskOrd.proteinGrams || diskOrd.total_protein || 45,
+                calories: diskOrd.calories || diskOrd.total_calories || 520,
+                status: diskOrd.status || 'New Order',
+                createdAt: diskOrd.createdAt || diskOrd.created_at || new Date().toISOString(),
+                timeFormatted: 'Just now',
+              }));
           }
         } catch {
           /* ignore */
@@ -331,7 +426,7 @@ export const useOrderStore = create<OrderState>()(
             if (key) map.set(key, o);
           }
 
-          // 2. Disk sync orders
+          // 2. Disk sync orders (already filtered by user ownership)
           for (const o of diskOrders) {
             const key = o.id || o.serverId;
             if (key) {
@@ -386,9 +481,23 @@ export const useOrderStore = create<OrderState>()(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           );
 
-          const updatedLatest = state.latestPlacedOrder
-            ? combined.find((o) => o.id === state.latestPlacedOrder?.id || o.serverId === state.latestPlacedOrder?.serverId) || state.latestPlacedOrder
-            : combined[0] || null;
+          const prevSig = (state.orders || []).map((o) => `${o.id}:${o.status}`).join('|');
+          const nextSig = combined.map((o) => `${o.id}:${o.status}`).join('|');
+
+          // If orders haven't changed and latestPlacedOrder is stable, skip updating to prevent re-renders
+          let updatedLatest = state.latestPlacedOrder;
+          if (state.latestPlacedOrder) {
+            const found = combined.find(
+              (o) => o.id === state.latestPlacedOrder?.id || o.serverId === state.latestPlacedOrder?.serverId
+            );
+            if (found && found.status !== state.latestPlacedOrder.status) {
+              updatedLatest = { ...found, isNew: false };
+            }
+          }
+
+          if (prevSig === nextSig && updatedLatest === state.latestPlacedOrder) {
+            return state;
+          }
 
           return {
             orders: combined,
@@ -398,6 +507,33 @@ export const useOrderStore = create<OrderState>()(
       },
 
       subscribeToMyOrders: () => {
+        const handleStorageOrBroadcast = () => {
+          try {
+            const raw = localStorage.getItem('brokole-orders-storage');
+            if (!raw) {
+              set({ orders: [], latestPlacedOrder: null });
+            }
+          } catch {}
+          void get().loadMyOrders();
+        };
+
+        window.addEventListener('storage', handleStorageOrBroadcast);
+        window.addEventListener('bkl-orders-updated', handleStorageOrBroadcast);
+
+        let bc: BroadcastChannel | null = null;
+        try {
+          if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+            bc = new BroadcastChannel('brokole-live-sync-channel');
+            bc.onmessage = (ev) => {
+              if (ev.data?.type === 'ORDERS_CLEARED') {
+                set({ orders: [], latestPlacedOrder: null });
+              } else {
+                void get().loadMyOrders();
+              }
+            };
+          }
+        } catch {}
+
         const tick = () => {
           if (document.visibilityState === 'visible') void get().loadMyOrders();
         };
@@ -405,6 +541,9 @@ export const useOrderStore = create<OrderState>()(
         document.addEventListener('visibilitychange', tick);
 
         return () => {
+          bc?.close();
+          window.removeEventListener('storage', handleStorageOrBroadcast);
+          window.removeEventListener('bkl-orders-updated', handleStorageOrBroadcast);
           window.clearInterval(interval);
           document.removeEventListener('visibilitychange', tick);
         };

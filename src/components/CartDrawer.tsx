@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useOrderStore } from '../store/useOrderStore';
 import { placeOrder, fetchDefaultOutletId, ensureAddress } from '../lib/menu';
 import { isApiConfigured } from '../lib/api';
+import { pushCloudOrder } from '../lib/cloudOrderSync';
 import { useCustomerStore } from '../store/useCustomerStore';
 import { formatCurrency } from '../lib/nutritionParser';
 import { toast } from 'sonner';
@@ -141,6 +142,7 @@ export const CartDrawer: React.FC = () => {
           const freshOrders = useOrderStore.getState().orders;
           if (freshOrders.length > 0) {
             useOrderStore.setState({ latestPlacedOrder: { ...freshOrders[0], isNew: true } });
+            void pushCloudOrder(freshOrders[0]);
           }
 
           toast.success('Order placed!', {
@@ -149,8 +151,7 @@ export const CartDrawer: React.FC = () => {
           });
         }
       } else {
-        // Offline / not yet connected to the database: keep the local demo flow
-        // so the storefront is still clickable.
+        // Offline / zero-config cloud sync flow
         const createdOrder = useOrderStore.getState().addOrder({
           userId: user?.id,
           userEmail: user?.email,
@@ -158,13 +159,18 @@ export const CartDrawer: React.FC = () => {
           customerPhone: phone,
           customerAddress: address,
           itemsSummary: itemsSummaryText,
+          itemsList: items.map((item) => ({
+            title: item.product.title,
+            quantity: item.quantity,
+            price: parseFloat(item.variant.price.amount) || parseFloat(item.product.priceRange?.minVariantPrice?.amount || '0') || 0,
+          })),
           totalAmount: grandTotal,
           proteinGrams: macroTotals.protein,
           calories: macroTotals.calories,
         });
 
-        toast.success(`Order #${createdOrder.id} recorded locally`, {
-          description: 'Demo mode - connect the API to send orders to the kitchen.',
+        toast.success(`Order #${createdOrder.id} placed successfully! 🎉`, {
+          description: 'Your order has been sent directly to the operations kitchen.',
           duration: 5000,
         });
       }

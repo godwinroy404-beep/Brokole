@@ -226,8 +226,32 @@ function AccountPage() {
   const toggleSkipDay = async (isoDate: string, dayLabel: string) => {
     if (savingDate) return;
 
+    const todayObj = new Date();
+    todayObj.setHours(0, 0, 0, 0);
+    const todayIso = toIsoDate(todayObj);
+
     const wasSkipped = skippedDates.has(isoDate);
     const nextSkipped = !wasSkipped;
+
+    if (isoDate === todayIso && nextSkipped) {
+      const isCurrentlyCooking =
+        subOrder &&
+        ((subOrder.status as string) === 'in_kitchen' ||
+          (subOrder.status as string) === 'Preparing' ||
+          (subOrder.status as string) === 'packed' ||
+          (subOrder.status as string) === 'out_for_delivery' ||
+          (subOrder.status as string) === 'Out for Delivery');
+
+      if (isCurrentlyCooking) {
+        const confirmInput = window.prompt(
+          "⚠️ Kitchen has already started preparing today's meal!\n\nNormal skipping is locked once cooking begins. To force skip for testing, type 'CANCEL' in uppercase:"
+        );
+        if (confirmInput !== 'CANCEL') {
+          toast.error("Cannot skip meal: Kitchen has already started cooking it.");
+          return;
+        }
+      }
+    }
 
     const optimistic = new Set(skippedDates);
     if (nextSkipped) optimistic.add(isoDate);
@@ -244,16 +268,37 @@ function AccountPage() {
       localStorage.setItem('bkl_skipped_days', JSON.stringify([...datesArr, ...dayNums]));
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new CustomEvent('bkl-skips-updated', { detail: datesArr }));
+      window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
 
-      const currentCustomerName = (user as any)?.name || (user as any)?.full_name || 'r roy';
-      const currentCustomerPhone = (user as any)?.phone || '+91 98765 00000';
-      const currentPlanTitle = subOrder?.itemsSummary || 'Brokole Shred & Gain Pro (7-Day Weekly)';
-      const currentOrderId = subOrder?.id || 'BKL-SUB-701';
+      const currentCustomerName = (user as any)?.name || (user as any)?.full_name || subOrder?.customerName || 'Valued Customer';
+      const currentCustomerPhone = (user as any)?.phone || subOrder?.customerPhone || '+91 98765 43210';
+      const currentPlanTitle = subOrder?.itemsSummary || 'Brokole Meal Subscription Plan';
+      const currentOrderId = subOrder?.id || 'BKL-SUB-001';
+
+      // Update in-memory Zustand store immediately so all components re-render
+      useOrderStore.setState((state) => ({
+        orders: state.orders.map((o) =>
+          o.id === currentOrderId || o.serverId === currentOrderId || (o.itemsSummary && (o.itemsSummary.toLowerCase().includes('plan') || o.itemsSummary.toLowerCase().includes('subscription')))
+            ? { ...o, skipped_days: datesArr, notes: `${currentPlanTitle} [SKIPPED_DAYS: ${datesArr.join(',')}]` }
+            : o
+        ),
+      }));
+
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        try {
+          const bc = new BroadcastChannel('brokole-live-sync-channel');
+          bc.postMessage({ type: 'skips_updated', dates: datesArr, orderId: currentOrderId });
+          bc.postMessage({ type: 'order_status_updated', orderId: currentOrderId, status: subOrder?.status || 'accepted' });
+          bc.close();
+        } catch {}
+      }
 
       void pushLocalOrderSync({
         id: currentOrderId,
         order_no: currentOrderId,
         customer_name: currentCustomerName,
+        customerName: currentCustomerName,
+        customerPhone: currentCustomerPhone,
         phone: currentCustomerPhone,
         channel: 'subscription',
         itemsSummary: currentPlanTitle,
@@ -263,7 +308,7 @@ function AccountPage() {
         skipped_days: datesArr,
         notes: `${currentPlanTitle} [SKIPPED_DAYS: ${datesArr.join(',')}]`,
         lines: [
-          { name_snapshot: currentPlanTitle, quantity: 1, unit_price: '1899', line_total: '1899' },
+          { name_snapshot: currentPlanTitle, quantity: 1, unit_price: String(subOrder?.totalAmount || 1899), line_total: String(subOrder?.totalAmount || 1899) },
         ],
       });
     } catch { /* ignore */ }
@@ -556,9 +601,11 @@ function AccountPage() {
         iso,
         dayOfMonth: d.getDate(),
         label: d.toLocaleDateString('en-IN', { weekday: 'short' }),
+        monthName: d.toLocaleDateString('en-IN', { month: 'short' }),
         date: d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) +
           (iso === todayIso ? ' (Today)' : ''),
         meal: ROTATION[(d.getDay() + 6) % 7],
+        shortMeal: SHORT_MEALS[(d.getDay() + 6) % 7],
         isPast: iso < todayIso,
         isToday: iso === todayIso,
       };
@@ -950,13 +997,21 @@ function AccountPage() {
 
               {/* FOR 7-DAY SUBSCRIPTION PLAN CUSTOMERS: SHOW strictly 7 DAYS */}
               {!isMonthlyPlan ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800">
-                    <span>Active 7-Day Meal Schedule:</span>
-                    <span className="text-emerald-700 font-black">7 Days Active</span>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
+                    <span className="flex items-center gap-1.5">
+                      <span>Weekly Delivery Schedule</span>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-black">
+                        7 Days Active
+                      </span>
+                    </span>
+                    <span className="text-[11px] text-emerald-700/80 font-semibold hidden sm:inline">
+                      Swipe or scroll to view full schedule
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
+                  {/* Horizontal Spacious Flex Row with minimum card width so nothing is ever clamped */}
+                  <div className="flex gap-3 overflow-x-auto pb-3 pt-1 scrollbar-thin snap-x">
                     {planDays.map((day) => {
                       const isSkipped = skippedDates.has(day.iso);
                       const isSaving = savingDate === day.iso;
@@ -964,95 +1019,93 @@ function AccountPage() {
                       return (
                         <div
                           key={day.iso}
-                          className={`rounded-2xl p-3 flex flex-col justify-between transition-all space-y-2.5 select-none ${
+                          className={`flex-1 min-w-[150px] max-w-[200px] rounded-2xl p-3.5 flex flex-col justify-between transition-all space-y-3 select-none shrink-0 snap-start shadow-2xs ${
                             day.isPast
-                              ? 'bg-emerald-50/40 border border-emerald-100 text-emerald-950 opacity-80'
+                              ? 'bg-emerald-50/40 border border-emerald-200/60 text-emerald-950 opacity-80'
                               : day.isToday
-                                ? 'bg-emerald-800 text-white border-2 border-emerald-950 shadow-md ring-2 ring-emerald-400'
+                                ? 'bg-emerald-900 text-white border-2 border-emerald-950 shadow-md ring-2 ring-emerald-400'
                                 : isSkipped
-                                  ? 'bg-amber-50/90 border-2 border-amber-300 text-amber-950 shadow-xs'
-                                  : 'bg-emerald-50/70 border border-emerald-200 text-emerald-950 shadow-2xs hover:border-emerald-500'
+                                  ? 'bg-amber-50/90 border-2 border-amber-300 text-amber-950'
+                                  : 'bg-emerald-50/70 border border-emerald-200 text-emerald-950 hover:border-emerald-400 hover:bg-emerald-100/60'
                           }`}
                         >
-                          {/* Day Header */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[11px] ${
-                                  day.isToday
-                                    ? 'bg-white text-emerald-900'
-                                    : isSkipped
-                                      ? 'bg-amber-500 text-white'
-                                      : 'bg-emerald-700 text-white'
-                                }`}
-                              >
-                                {day.dayOfMonth}
+                          {/* Card Header: Day & Date + Status Dot / Today Pill */}
+                          <div className="flex items-center justify-between gap-1 pb-1 border-b border-black/5">
+                            <div className="flex items-baseline gap-1.5 min-w-0">
+                              <span className={`text-sm font-black ${day.isToday ? 'text-white' : 'text-emerald-950'}`}>
+                                {day.label}
                               </span>
-                              <div>
-                                <div className={`font-black text-xs leading-tight ${day.isToday ? 'text-white' : 'text-emerald-950'}`}>
-                                  {day.label}
-                                </div>
-                                <div className={`text-[9px] font-semibold ${day.isToday ? 'text-emerald-100' : 'text-emerald-700/70'}`}>
-                                  {day.date}
-                                </div>
-                              </div>
+                              <span className={`text-xs font-bold ${day.isToday ? 'text-emerald-200' : 'text-emerald-700'}`}>
+                                {day.dayOfMonth} {day.monthName || 'Sept'}
+                              </span>
                             </div>
 
+                            <div className="shrink-0 flex items-center gap-1">
+                              {day.isToday ? (
+                                <span className="px-1.5 py-0.5 rounded-md bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider shadow-2xs">
+                                  Today
+                                </span>
+                              ) : isSkipped ? (
+                                <span className="inline-block size-2.5 rounded-full bg-amber-500 ring-2 ring-amber-200" title="Skipped" />
+                              ) : day.isPast ? (
+                                <span className="inline-block size-2 rounded-full bg-emerald-600/50" title="Delivered" />
+                              ) : (
+                                <span className="inline-block size-2.5 rounded-full bg-emerald-500" title="Scheduled" />
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Meal Title / Status Banner */}
+                          <div className="min-h-[36px] flex flex-col justify-center">
                             {isSkipped ? (
-                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-amber-200" title="Skipped" />
+                              <div className="py-1 px-2 rounded-lg bg-amber-200/90 text-amber-950 text-[11px] font-black flex items-center justify-center gap-1 shadow-2xs">
+                                <span>⏸️</span>
+                                <span>Kitchen Paused</span>
+                              </div>
                             ) : day.isPast ? (
-                              <span className="w-2 h-2 rounded-full bg-emerald-600/50" title="Delivered" />
+                              <div className="text-[11px] font-bold text-emerald-800 flex items-center gap-1">
+                                <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+                                <span>Delivered Fresh</span>
+                              </div>
                             ) : (
-                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" title="Scheduled" />
+                              <div className={`text-xs font-bold leading-snug line-clamp-2 ${day.isToday ? 'text-emerald-50 font-extrabold' : 'text-emerald-950'}`}>
+                                {day.shortMeal || day.meal}
+                              </div>
                             )}
                           </div>
 
-                          {/* Meal Title */}
-                          <div className="text-[10px] font-bold truncate leading-tight">
-                            {isSkipped ? (
-                              <span className="text-amber-900 font-black bg-amber-200/90 px-1.5 py-0.5 rounded inline-block">
-                                Skipped
-                              </span>
-                            ) : day.isPast ? (
-                              <span className="text-emerald-700/70 font-semibold">Delivered</span>
-                            ) : (
-                              <span className={day.isToday ? 'text-emerald-100' : 'text-emerald-900/90'}>
-                                {day.meal}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Skip / Restore Action Button */}
+                          {/* Action Button: Clean, Single-Line, Uncongested */}
                           {!day.isPast ? (
                             <button
                               type="button"
-                              onClick={() => void toggleSkipDay(day.iso, `${day.label} ${day.date.replace(' (Today)', '')}`)}
+                              onClick={() => void toggleSkipDay(day.iso, `${day.label} ${day.dayOfMonth} ${day.monthName || ''}`)}
                               disabled={isSaving || skipsLoading}
-                              className={`w-full py-1.5 px-2 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-1 cursor-pointer carved-btn disabled:opacity-50 ${
+                              className={`w-full py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95 shadow-sm disabled:opacity-50 ${
                                 isSkipped
-                                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
+                                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-md'
                                   : day.isToday
-                                    ? 'bg-amber-400 text-emerald-950 hover:bg-amber-300 font-black shadow-xs'
-                                    : 'bg-amber-500 text-white hover:bg-amber-600 shadow-xs'
+                                    ? 'bg-amber-400 text-emerald-950 hover:bg-amber-300 hover:shadow-md font-black'
+                                    : 'bg-amber-500 text-white hover:bg-amber-600 hover:shadow-md'
                               }`}
                             >
                               {isSaving ? (
                                 <span>Saving…</span>
                               ) : isSkipped ? (
                                 <>
-                                  <PlayCircle className="w-3 h-3" />
+                                  <PlayCircle className="size-3.5 shrink-0" />
                                   <span>Restore</span>
                                 </>
                               ) : (
                                 <>
-                                  <PauseCircle className="w-3 h-3" />
+                                  <PauseCircle className="size-3.5 shrink-0" />
                                   <span>Skip Day</span>
                                 </>
                               )}
                             </button>
                           ) : (
-                            <div className="py-1 text-center text-[9px] font-bold text-emerald-700 bg-emerald-100/60 rounded-xl">
-                              Delivered
+                            <div className="py-2 text-center text-[11px] font-black text-emerald-800 bg-emerald-100/80 rounded-xl flex items-center justify-center gap-1">
+                              <CheckCircle2 className="size-3 text-emerald-700" />
+                              <span>Delivered</span>
                             </div>
                           )}
                         </div>
@@ -1435,37 +1488,57 @@ function AccountPage() {
 
                         {(() => {
                           const stLower = (order.status || '').toLowerCase();
-                          const isPackedOrBeyond =
+                          const isDeliveredOrCancelled =
+                            stLower.includes('delivered') ||
+                            stLower.includes('cancelled') ||
+                            stLower.includes('canceled') ||
+                            stLower.includes('refunded');
+
+                          if (isDeliveredOrCancelled) return null;
+
+                          const isCookingOrBeyond =
+                            stLower.includes('in_kitchen') ||
+                            stLower.includes('preparing') ||
                             stLower.includes('packed') ||
                             stLower.includes('rider') ||
                             stLower.includes('out_for_delivery') ||
-                            stLower.includes('out for delivery') ||
-                            stLower.includes('delivered') ||
-                            stLower.includes('cancelled') ||
-                            stLower.includes('refunded');
+                            stLower.includes('out for delivery');
 
-                          if (!isPackedOrBeyond) {
-                            return (
-                              <button
-                                type="button"
-                                onClick={async () => {
+                          return (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (isCookingOrBeyond) {
+                                  const confirmInput = window.prompt(
+                                    `⚠️ Kitchen is already cooking / preparing Order #${order.id}!\n\nNormal cancellation is closed. To force cancel for developer testing, type 'CANCEL' in uppercase:`
+                                  );
+                                  if (confirmInput === 'CANCEL') {
+                                    const res = await useOrderStore.getState().forceCancelUserOrder(order.id, 'Force cancelled for testing');
+                                    if (res.ok) {
+                                      toast.success(`Order #${order.id} force cancelled successfully.`);
+                                    } else {
+                                      toast.error(res.error || 'Could not force cancel order');
+                                    }
+                                  } else if (confirmInput !== null) {
+                                    toast.error('Cancellation blocked: Meal is already being prepared in the kitchen.');
+                                  }
+                                } else {
                                   if (window.confirm(`Are you sure you want to cancel order #${order.id}?`)) {
                                     const res = await useOrderStore.getState().cancelUserOrder(order.id, 'Cancelled via My Orders');
                                     if (res.ok) {
-                                      toast.success(`Order #${order.id} cancelled successfully`);
+                                      toast.success(`Order #${order.id} cancelled successfully.`);
                                     } else {
                                       toast.error(res.error || 'Could not cancel order');
                                     }
                                   }
-                                }}
-                                className="px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-extrabold text-xs transition-all flex items-center gap-1 cursor-pointer"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                                <span>Cancel Order</span>
-                              </button>
-                            );
-                          }
-                          return null;
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 font-extrabold text-xs transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>Cancel Order</span>
+                            </button>
+                          );
                         })()}
                       </div>
                     </div>

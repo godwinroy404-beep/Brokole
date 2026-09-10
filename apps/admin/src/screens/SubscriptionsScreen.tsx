@@ -6,7 +6,10 @@ import {
   TrendingUp, PlayCircle, LayoutGrid, List, ShieldCheck, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatINR, ORDER_STATUS_LABELS, type Order, type OrderStatus } from '@brokole/domain';
+import {
+  formatINR, ORDER_STATUS_LABELS, type Order, type OrderStatus,
+  fetchCloudOrders, updateCloudOrderStatus,
+} from '@brokole/domain';
 import { api, isApiConfigured } from '../lib/api';
 import type { AdminSession } from '../lib/useSession';
 
@@ -62,100 +65,7 @@ function formatSkippedDaysText(orderSkippedDays: (string | number)[], weekDays: 
 }
 
 function getFallbackSubscriptionOrders(): Order[] {
-  return [
-    {
-      id: 'sub-roy-1',
-      order_no: 'BKL-SUB-701',
-      status: 'accepted',
-      channel: 'subscription',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 1808,
-      tax_amount: 91,
-      delivery_fee: 0,
-      total: 1899,
-      total_calories: 680,
-      total_protein: 55,
-      customer_id: 'usr-roy',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: 'Brokole Shred & Gain Pro (7-Day Weekly) Goal Plan',
-      lines: [
-        { name_snapshot: 'Brokole Shred & Gain Pro (7-Day Weekly)', quantity: 1, unit_price: '1899', line_total: '1899' },
-      ],
-      customer_name: 'r roy',
-      phone: '+91 98765 00000',
-      skipped_days: [],
-    } as any,
-    {
-      id: 'sub-1',
-      order_no: 'BKL-SUB-301',
-      status: 'accepted',
-      channel: 'subscription',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 7142,
-      tax_amount: 357,
-      delivery_fee: 0,
-      total: 7499,
-      total_calories: 680,
-      total_protein: 55,
-      customer_id: 'usr-1',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: 'Muscle Build & Hypertrophy Goal Plan [SKIPPED_DAYS: 4, 11]',
-      lines: [
-        { name_snapshot: 'Shred & Gain Pro (30 Days) - High Protein', quantity: 1, unit_price: '7499', line_total: '7499' },
-      ],
-      customer_name: 'Siddharth Rao',
-      phone: '+91 98451 22910',
-      skipped_days: [4, 11],
-    } as any,
-    {
-      id: 'sub-2',
-      order_no: 'BKL-SUB-302',
-      status: 'accepted',
-      channel: 'subscription',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 8570,
-      tax_amount: 429,
-      delivery_fee: 0,
-      total: 8999,
-      total_calories: 720,
-      total_protein: 64,
-      customer_id: 'usr-2',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: 'Elite Athlete Plan (30 Days) - Athletic Performance Goal Plan',
-      lines: [
-        { name_snapshot: '30-Day Elite Athlete VIP Plan', quantity: 1, unit_price: '8999', line_total: '8999' },
-      ],
-      customer_name: 'Ananya Deshmukh',
-      phone: '+91 98200 41109',
-      skipped_days: [15],
-    } as any,
-    {
-      id: 'sub-3',
-      order_no: 'BKL-SUB-303',
-      status: 'in_kitchen',
-      channel: 'subscription',
-      business_date: new Date().toISOString().split('T')[0],
-      subtotal: 1808,
-      tax_amount: 91,
-      delivery_fee: 0,
-      total: 1899,
-      total_calories: 520,
-      total_protein: 42,
-      customer_id: 'usr-3',
-      placed_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      notes: '7-Day Fat Loss & Lean Shred Flex Plan',
-      lines: [
-        { name_snapshot: '7-Day Flex Shred Plan (Low Carb)', quantity: 1, unit_price: '1899', line_total: '1899' },
-      ],
-      customer_name: 'Priya Sharma',
-      phone: '+91 98230 44122',
-      skipped_days: [],
-    } as any,
-  ];
+  return [];
 }
 
 async function fetchDiskOrders(): Promise<Order[]> {
@@ -265,12 +175,18 @@ function getLocalStorageOrders(): Order[] {
 }
 
 export function SubscriptionsScreen({ session }: { session: AdminSession }) {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>(() => getFallbackSubscriptionOrders());
   const [activeTab, setActiveTab] = useState<'cards' | 'roster'>('cards');
   const [searchQuery, setSearchQuery] = useState('');
   const [planFilter, setPlanFilter] = useState<'all' | '30days' | '7days' | 'skipped'>('all');
-  const [skippedDays, setSkippedDays] = useState<number[]>([]);
+  const [liveSkippedDates, setLiveSkippedDates] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('bkl_skipped_dates');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [dismissedSubIds, setDismissedSubIds] = useState<string[]>([]);
   const handleSyncLiveSubscriptions = async () => {
     setDismissedSubIds([]);
@@ -290,18 +206,49 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       )
     );
 
+    // Persist to local storage store so it stays accepted
     try {
-      if (isApiConfigured) {
-        await api.patch(`/orders/${encodeURIComponent(orderId)}/status`, { status: 'accepted' });
+      const raw = localStorage.getItem('brokole-orders-storage');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.state?.orders)) {
+          parsed.state.orders = parsed.state.orders.map((o: any) =>
+            o.id === orderId || o.serverId === orderId || o.order_no === orderId
+              ? { ...o, status: 'accepted', isNew: false }
+              : o
+          );
+          localStorage.setItem('brokole-orders-storage', JSON.stringify(parsed));
+        }
       }
-      toast.success(`Subscription ${orderId} Accepted! 🎉`, {
-        description: 'Customer subscription activated for daily kitchen schedule.',
-      });
-    } catch {
-      toast.success(`Subscription ${orderId} Accepted!`, {
-        description: 'Activated locally.',
-      });
-    }
+    } catch {}
+
+    void updateCloudOrderStatus(orderId, 'accepted');
+
+    try {
+      await fetch('/api/local-orders-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: 'accepted' }),
+      }).catch(() => {});
+
+      if (isApiConfigured) {
+        await api.patch(`/orders/${encodeURIComponent(orderId)}/status`, { status: 'accepted' }).catch(() => {});
+      }
+    } catch {}
+
+    try {
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('brokole-live-sync-channel');
+        bc.postMessage({ type: 'order_status_updated', orderId, status: 'accepted' });
+        bc.close();
+      }
+    } catch {}
+
+    toast.success(`Subscription ${orderId} Accepted! 🎉`, {
+      description: 'Customer subscription activated for daily kitchen schedule.',
+    });
   };
 
   const handleDismissSubscription = async (orderId: string) => {
@@ -420,6 +367,55 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       }
     }
 
+    let cloudOrders: Order[] = [];
+    try {
+      const cloudData = await fetchCloudOrders();
+      if (Array.isArray(cloudData)) {
+        cloudOrders = cloudData
+          .filter((o) => !o.deleted)
+          .map((o) => {
+            let st = (o.status || '').toLowerCase();
+            if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
+            else if (st === 'accepted') st = 'accepted';
+            else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
+            else if (st === 'packed') st = 'packed';
+            else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
+            else if (st === 'delivered') st = 'delivered';
+            else if (st === 'cancelled' || st === 'canceled' || st === 'refunded') st = 'cancelled';
+            else st = 'placed';
+
+            const itemsSummary = o.itemsSummary || o.notes || 'Meal Plan';
+
+            return {
+              id: o.serverId || o.id,
+              order_no: o.order_no || o.id || 'BKL-SUB-001',
+              status: st as OrderStatus,
+              channel: o.channel || (itemsSummary.toLowerCase().includes('plan') || itemsSummary.toLowerCase().includes('sub') || itemsSummary.toLowerCase().includes('weekly') || itemsSummary.toLowerCase().includes('shred') ? 'subscription' : 'online'),
+              business_date: new Date(o.createdAt || o.created_at || Date.now()).toISOString().split('T')[0],
+              subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : 1800,
+              tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : 90,
+              delivery_fee: 0,
+              total: o.totalAmount || 1899,
+              total_calories: o.calories || 600,
+              total_protein: o.proteinGrams || 50,
+              customer_id: o.userId || 'usr-demo',
+              placed_at: o.createdAt || o.created_at || new Date().toISOString(),
+              created_at: o.createdAt || o.created_at || new Date().toISOString(),
+              notes: o.notes || itemsSummary,
+              lines: (o.itemsList || o.lines || []).map((item: any) => ({
+                name_snapshot: item.title || item.name_snapshot || 'Goal Meal Plan',
+                quantity: item.quantity || 1,
+                unit_price: String(item.price || item.unit_price || 0),
+                line_total: String((item.price || item.unit_price || 0) * (item.quantity || 1)),
+              })),
+              customer_name: o.customerName || o.customer_name || 'Customer',
+              phone: o.customerPhone || '+91 98765 43210',
+              skipped_days: [],
+            } as any;
+          });
+      }
+    } catch {}
+
     const diskOrders = await fetchDiskOrders();
     const localStoreOrders = getLocalStorageOrders();
 
@@ -437,66 +433,70 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
     for (const o of diskOrders) {
       orderMap.set(o.id || o.order_no, o);
     }
+    // Cloud sync (high priority across all devices)
+    for (const o of cloudOrders) {
+      orderMap.set(o.id || o.order_no, o);
+    }
     // API orders (highest priority)
     for (const o of apiOrders) {
       orderMap.set(o.id || o.order_no, o);
     }
 
-    setOrders(Array.from(orderMap.values()));
-    setLoading(false);
+    const newOrders = Array.from(orderMap.values());
+    setOrders((prev) => {
+      const prevSig = prev.map((o) => `${o.id}:${o.status}`).join('|');
+      const nextSig = newOrders.map((o) => `${o.id}:${o.status}`).join('|');
+      if (prevSig === nextSig) return prev;
+      return newOrders;
+    });
   }, []);
 
   useEffect(() => {
     void fetchOrders();
   }, [fetchOrders]);
 
+  // Real-time live polling every 1.5s + cross-tab BroadcastChannel for instant skip reflection
   useEffect(() => {
-    const handleStorage = () => {
-      try {
-        const saved = localStorage.getItem('bkl_skipped_days');
-        setSkippedDays(saved ? JSON.parse(saved) : []);
-        void fetchOrders();
-      } catch {
-        // ignore
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('brokole-live-sync-channel');
+        bc.onmessage = (ev) => {
+          if (ev.data?.type === 'skips_updated' && Array.isArray(ev.data.dates)) {
+            setLiveSkippedDates(ev.data.dates);
+          }
+          void fetchOrders();
+        };
       }
+    } catch {}
+
+    const handleStorageOrSkips = (e?: any) => {
+      try {
+        if (e?.detail && Array.isArray(e.detail)) {
+          setLiveSkippedDates(e.detail);
+        } else {
+          const saved = localStorage.getItem('bkl_skipped_dates');
+          setLiveSkippedDates(saved ? JSON.parse(saved) : []);
+        }
+      } catch {}
+      void fetchOrders();
     };
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('bkl-skips-updated', handleStorage);
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('bkl-skips-updated', handleStorage);
-    };
-  }, [fetchOrders]);
 
-  // Real skipped days for the month, from subscription_skips.
-  useEffect(() => {
-    if (!isApiConfigured) return;
-    let alive = true;
+    window.addEventListener('storage', handleStorageOrSkips);
+    window.addEventListener('bkl-skips-updated', handleStorageOrSkips);
+    window.addEventListener('bkl-orders-updated', handleStorageOrSkips);
 
-    const now = new Date();
-    const pad = (v: number) => String(v).padStart(2, '0');
-    const first = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
-    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const lastIso = `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`;
-
-    api
-      .get<{ skips: Array<{ skip_date: string }> }>(`/admin/skips?from=${first}&to=${lastIso}`)
-      .then(({ skips }) => {
-        if (!alive) return;
-        setSkippedDays([...new Set(skips.map((s) => Number(String(s.skip_date).slice(8, 10))))]);
-      })
-      .catch(() => { /* the board still works without it */ });
-
-    return () => { alive = false; };
-  }, []);
-
-  useEffect(() => {
     const tick = () => {
       if (document.visibilityState === 'visible') void fetchOrders();
     };
-    const interval = window.setInterval(tick, 4000);
+    const interval = window.setInterval(tick, 1500);
     document.addEventListener('visibilitychange', tick);
+
     return () => {
+      bc?.close();
+      window.removeEventListener('storage', handleStorageOrSkips);
+      window.removeEventListener('bkl-skips-updated', handleStorageOrSkips);
+      window.removeEventListener('bkl-orders-updated', handleStorageOrSkips);
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', tick);
     };
@@ -508,28 +508,16 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       const orderId = order.id || order.order_no;
       if (dismissedSubIds.includes(orderId)) return false;
 
-      const isSubChannel = order.channel === 'subscription';
-      const isSubNo = (order.order_no || '').toLowerCase().includes('sub');
-      const isSubItem = order.lines?.some((l) => {
-        const name = (l.name_snapshot || '').toLowerCase();
-        return (
-          name.includes('subscription') ||
-          name.includes('weekly flex') ||
-          name.includes('shred & gain') ||
-          name.includes('shred and gain') ||
-          name.includes('athlete plan') ||
-          name.includes('30-day') ||
-          name.includes('7-day flex') ||
-          name.includes('pre-book')
-        );
-      });
-      const isSubNotes = order.notes && (
-        order.notes.toLowerCase().includes('subscription') ||
-        order.notes.toLowerCase().includes('weekly flex') ||
-        order.notes.toLowerCase().includes('shred & gain') ||
-        order.notes.toLowerCase().includes('athlete plan')
-      );
-      return isSubChannel || isSubNo || isSubNotes || isSubItem;
+      const isSub = (order as any).channel === 'subscription' ||
+        order.order_no.startsWith('BKL-SUB-') ||
+        (order.lines && order.lines.some((l: any) =>
+          (l.name_snapshot || '').toLowerCase().includes('plan') ||
+          (l.name_snapshot || '').toLowerCase().includes('subscription') ||
+          (l.name_snapshot || '').toLowerCase().includes('weekly') ||
+          (l.name_snapshot || '').toLowerCase().includes('monthly') ||
+          (l.name_snapshot || '').toLowerCase().includes('shred & gain')
+        ));
+      return isSub;
     });
   }, [orders, dismissedSubIds]);
 
@@ -559,21 +547,11 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       if (planFilter === '30days') return subPlanTitle.toLowerCase().includes('30-day') || subPlanTitle.toLowerCase().includes('monthly');
       if (planFilter === '7days') return subPlanTitle.toLowerCase().includes('7-day') || subPlanTitle.toLowerCase().includes('weekly');
       if (planFilter === 'skipped') {
-        const orderSkippedDays = (order as any).skipped_days || [];
-        return orderSkippedDays.length > 0 || skippedDays.length > 0;
+        return liveSkippedDates.length > 0;
       }
       return true;
     });
-  }, [subscriptionOrders, searchQuery, planFilter, skippedDays]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-neutral-500 py-12 justify-center">
-        <Loader2 className="size-5 animate-spin text-purple-600" />
-        <span className="font-semibold text-neutral-700">Loading VIP Subscription Hub & Calendar Schedules…</span>
-      </div>
-    );
-  }
+  }, [subscriptionOrders, searchQuery, planFilter, liveSkippedDates]);
 
   return (
     <div className="space-y-6">
@@ -782,40 +760,8 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                 const isMonthly = subPlanTitle.toLowerCase().includes('monthly') || subPlanTitle.toLowerCase().includes('30-day');
                 const totalDays = isMonthly ? 30 : 7;
 
-                // Extract live skipped_days from database order response, notes tag, or storage fallback
-                let orderSkippedDays: (string | number)[] = [];
-
-                const savedDates = localStorage.getItem('bkl_skipped_dates');
-                let localDates: string[] = [];
-                try {
-                  if (savedDates) {
-                    const parsed = JSON.parse(savedDates);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                      localDates = parsed;
-                    }
-                  }
-                } catch { /* ignore */ }
-
-                const isRoyOrder = (order as any).customer_name?.toLowerCase().includes('roy') ||
-                                   (order as any).customer_name?.toLowerCase().includes('valued') ||
-                                   order.id?.includes('roy') ||
-                                   order.id?.includes('303') ||
-                                   order.order_no?.includes('303') ||
-                                   order.order_no?.includes('701');
-
-                if (Array.isArray((order as any).skipped_days) && (order as any).skipped_days.length > 0) {
-                  orderSkippedDays = (order as any).skipped_days;
-                } else if (order.notes && order.notes.includes('[SKIPPED_DAYS:')) {
-                  const match = order.notes.match(/\[SKIPPED_DAYS:\s*([0-9a-zA-Z\-, ]*)\]/i);
-                  if (match && match[1]) {
-                    orderSkippedDays = match[1].split(',').map((s) => s.trim());
-                  }
-                }
-
-                if (localDates.length > 0 && (isRoyOrder || orderSkippedDays.length === 0)) {
-                  orderSkippedDays = [...new Set([...orderSkippedDays, ...localDates])];
-                }
-
+                // Use liveSkippedDates as real-time reactive source of truth
+                const orderSkippedDays: (string | number)[] = liveSkippedDates;
                 const activeSkippedCount = orderSkippedDays.length;
                 const goal = getCustomerGoalInfo(order, subPlanTitle);
                 const customerName = (order as any).customer_name || 'Valued VIP Member';
@@ -868,10 +814,10 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {order.status === 'accepted' ? (
-                            <span className="rounded-full px-3 py-1 text-xs font-black bg-blue-100 text-blue-900 border border-blue-300 flex items-center gap-1">
-                              <CheckCircle2 className="size-3.5 text-blue-600" />
-                              <span>Accepted</span>
+                          {order.status !== 'placed' && order.status !== 'paid' ? (
+                            <span className="rounded-full px-3 py-1 text-xs font-black bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1">
+                              <CheckCircle2 className="size-3.5 text-purple-700" />
+                              <span>Active Plan</span>
                             </span>
                           ) : (
                             <button
@@ -1041,7 +987,7 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                   const subPlanTitle =
                     order.lines && order.lines.length > 0 ? order.lines[0].name_snapshot : 'Brokole Meal Subscription Plan';
                   const goal = getCustomerGoalInfo(order, subPlanTitle);
-                  const orderSkippedDays = (order as any).skipped_days || skippedDays;
+                  const orderSkippedDays = liveSkippedDates;
 
                   return (
                     <tr key={order.id} className="hover:bg-neutral-50/80 transition-colors">
@@ -1082,10 +1028,10 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                       </td>
 
                       <td className="px-4 py-3.5 text-center">
-                        {order.status === 'accepted' ? (
-                          <span className="rounded-full px-2.5 py-0.5 text-[11px] font-black bg-blue-100 text-blue-900 border border-blue-300 inline-flex items-center gap-1">
-                            <CheckCircle2 className="size-3 text-blue-600" />
-                            <span>Accepted</span>
+                        {order.status !== 'placed' && order.status !== 'paid' ? (
+                          <span className="rounded-full px-2.5 py-0.5 text-[11px] font-black bg-purple-100 text-purple-900 border border-purple-300 inline-flex items-center gap-1">
+                            <CheckCircle2 className="size-3 text-purple-700" />
+                            <span>Active Plan</span>
                           </span>
                         ) : (
                           <button

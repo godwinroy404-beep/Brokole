@@ -6,6 +6,12 @@
   --color-primary-light: #e8f5e9;
   --color-primary-muted: #2e7d32;
 
+  --color-brand-50: oklch(0.96 0.03 145);
+  --color-brand-100: oklch(0.92 0.06 145);
+  --color-brand-500: oklch(0.62 0.14 145);
+  --color-brand-600: oklch(0.55 0.14 145);
+  --color-brand-700: oklch(0.47 0.12 145);
+
   --color-accent: #84cc16;
   --color-accent-hover: #65a30d;
   --color-accent-light: #f7fee7;
@@ -152,4 +158,88 @@
   background-size: 10px 2px;
   animation: roadDash 0.6s linear infinite;
 }
+
+/* Smooth, graceful modal reveal and whoosh minimize animations */
+@keyframes smoothTrackerExpand {
+  0% {
+    transform: scale(0.75) translate(25px, 25px);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.015) translate(-1px, -1px);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1) translate(0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes smoothTrackerMinimize {
+  0% {
+    transform: scale(1) translate(0, 0);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1.02) translate(-2px, -2px);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(0.25) translate(110px, 110px);
+    opacity: 0;
+  }
+}
+
+@keyframes pillAttentionWiggle {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  20% {
+    transform: scale(1.12) rotate(-3deg);
+  }
+  40% {
+    transform: scale(1.08) rotate(2deg);
+  }
+  60% {
+    transform: scale(1.04) rotate(-1deg);
+  }
+  80% {
+    transform: scale(1.02) rotate(1deg);
+  }
+}
+
+.animate-jelly-expand {
+  transform-origin: bottom right;
+  animation: smoothTrackerExpand 0.46s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-jelly-minimize {
+  transform-origin: bottom right;
+  animation: smoothTrackerMinimize 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-pill-wiggle {
+  animation: pillAttentionWiggle 0.75s ease-in-out;
+}
+
+/* Position Toast Alert Close Button on the Right Side */
+[data-sonner-toast] [data-close-button] {
+  left: auto !important;
+  right: 0 !important;
+  transform: translate(35%, -35%) !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  background: #ffffff !important;
+  color: #64748b !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  cursor: pointer !important;
+  border-radius: 9999px !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  color: #0f172a !important;
+  background: #f8fafc !important;
+  transform: translate(35%, -35%) scale(1.08) !important;
+}
+
 

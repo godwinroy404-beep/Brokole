@@ -68,11 +68,11 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
  */
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   draft:            ['placed', 'cancelled'],
-  placed:           ['paid', 'accepted', 'cancelled'],
-  paid:             ['accepted', 'cancelled', 'refunded'],
-  accepted:         ['in_kitchen', 'cancelled'],
-  in_kitchen:       ['packed', 'cancelled'],
-  packed:           ['out_for_delivery'],
+  placed:           ['paid', 'accepted', 'in_kitchen', 'cancelled'],
+  paid:             ['accepted', 'in_kitchen', 'cancelled', 'refunded'],
+  accepted:         ['in_kitchen', 'out_for_delivery', 'cancelled'],
+  in_kitchen:       ['packed', 'out_for_delivery', 'delivered', 'cancelled'],
+  packed:           ['out_for_delivery', 'delivered'],
   out_for_delivery: ['delivered'],
   delivered:        ['refunded'],
   cancelled:        [],
@@ -83,13 +83,13 @@ export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
-/** The next step a kitchen user would normally take. */
+/** The next step a kitchen or ops staff member would normally take. */
 export function nextStatus(from: OrderStatus): OrderStatus | null {
   const happyPath: Partial<Record<OrderStatus, OrderStatus>> = {
-    placed: 'accepted',
-    paid: 'accepted',
+    placed: 'in_kitchen',
+    paid: 'in_kitchen',
     accepted: 'in_kitchen',
-    in_kitchen: 'packed',
+    in_kitchen: 'out_for_delivery',
     packed: 'out_for_delivery',
     out_for_delivery: 'delivered',
   };
@@ -107,6 +107,15 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   delivered: 'Delivered',
   cancelled: 'Cancelled',
   refunded: 'Refunded',
+};
+
+export const ORDER_ACTION_LABELS: Partial<Record<OrderStatus, string>> = {
+  placed: 'Accept & Start Cooking',
+  paid: 'Accept & Start Cooking',
+  accepted: 'Start Cooking',
+  in_kitchen: 'Hand to Rider (Out for Delivery)',
+  packed: 'Hand to Rider (Out for Delivery)',
+  out_for_delivery: 'Confirm Delivered',
 };
 
 // ── money ───────────────────────────────────────────────────────────────────
@@ -215,3 +224,5 @@ export interface Order {
   notes: string | null;
   lines?: Array<{ name_snapshot: string; quantity: number; unit_price: string; line_total: string; notes?: string | null }>;
 }
+
+export * from './cloudSync';

@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useCartStore } from '../store/useCartStore';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate, Link } from '@tanstack/react-router';
+import { useAuthStore } from '../store/useAuthStore';
+import { useOrderStore } from '../store/useOrderStore';
+import { useCustomerStore } from '../store/useCustomerStore';
 import { useMacroStore } from '../store/useMacroStore';
 import { useProductStore } from '../store/useProductStore';
 import { Product } from '../lib/shopify';
 import { formatCurrency } from '../lib/nutritionParser';
+import { pushLocalOrderSync } from '../lib/localSync';
+import { pushCloudOrder } from '../lib/cloudOrderSync';
 import {
   Calendar,
   Sparkles,
@@ -24,6 +29,13 @@ import {
   BookOpen,
   ChevronDown,
   CheckCircle2,
+  Phone,
+  MapPin,
+  User,
+  CreditCard,
+  Lock,
+  PauseCircle,
+  TrendingUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,6 +48,7 @@ export interface PlanTier {
   monthlyPrice: number;
   mealsPerDay: number;
   proteinPerDay: number;
+  caloriesPerDay: number;
   popular?: boolean;
   features: string[];
   badge?: string;
@@ -78,7 +91,7 @@ const FITNESS_GOALS: FitnessGoalOption[] = [
   {
     id: 'athletic',
     label: 'Athletic Performance & Energy',
-    badge: 'Peak Performance',
+    badge: '⚡ Peak Performance',
     icon: Zap,
     desc: 'Clean complex carbs & protein fueling intense workouts, stamina & endurance.',
     dietMatch: 'High Protein',
@@ -89,28 +102,30 @@ const SUBSCRIPTION_PLANS: PlanTier[] = [
   {
     id: 'plan-weekly-flex',
     name: 'Weekly Flex Plan',
-    tagline: 'Ideal for trying out macro-balanced eating with complete flexibility.',
+    tagline: 'Ideal for trying out macro-balanced eating with complete daily flexibility.',
     tomorrowPrice: 299,
     weeklyPrice: 1899,
     monthlyPrice: 5999,
     mealsPerDay: 2,
     proteinPerDay: 75,
+    caloriesPerDay: 580,
     features: [
       '2 Chef & Dietitian meals daily (Lunch + Dinner)',
-      'Free pre-order delivery to your door',
-      'Pause, skip, or modify meals anytime via app',
+      'Free VIP pre-order delivery to your doorstep',
+      'Pause, skip, or restore meals anytime via app calendar',
       'Macro breakdown report included per delivery',
     ],
   },
   {
     id: 'plan-shred-gain',
     name: 'Shred & Gain Pro',
-    tagline: 'Our #1 most popular plan for rapid fitness transformation and muscle gain.',
+    tagline: 'Our #1 most popular plan for rapid fitness transformation and muscle hypertrophy.',
     tomorrowPrice: 399,
     weeklyPrice: 2399,
     monthlyPrice: 7499,
     mealsPerDay: 2,
     proteinPerDay: 95,
+    caloriesPerDay: 680,
     popular: true,
     badge: 'SAVE 25% MONTHLY',
     features: [
@@ -130,6 +145,7 @@ const SUBSCRIPTION_PLANS: PlanTier[] = [
     monthlyPrice: 8999,
     mealsPerDay: 3,
     proteinPerDay: 130,
+    caloriesPerDay: 850,
     features: [
       '3 Full chef meals daily (Breakfast, Lunch, Dinner)',
       '130g+ Daily protein target with double-portion option',
@@ -141,15 +157,17 @@ const SUBSCRIPTION_PLANS: PlanTier[] = [
 ];
 
 export const SubscriptionPlans: React.FC = () => {
-  const addItem = useCartStore((state) => state.addItem);
-  const openCart = useCartStore((state) => state.openCart);
+  const navigate = useNavigate();
+  const { user, isLoggedIn, openAuthModal, updateUser } = useAuthStore();
+  const { orders, addOrder, loadMyOrders } = useOrderStore();
+  const upsertCustomer = useCustomerStore((state) => state.upsertCustomer);
   const setMacroProfile = useMacroStore((state) => state.setProfile);
   const macroProfile = useMacroStore((state) => state.profile);
 
   const storeProducts = useProductStore((state) => state.products);
   const loadProducts = useProductStore((state) => state.loadProducts);
 
-  const [billingCycle, setBillingCycle] = useState<'tomorrow' | 'weekly' | 'monthly'>('tomorrow');
+  const [billingCycle, setBillingCycle] = useState<'tomorrow' | 'weekly' | 'monthly'>('weekly');
   const [selectedDiet, setSelectedDiet] = useState<string>('High Protein');
   const [selectedSlot, setSelectedSlot] = useState<string>('Lunch & Dinner (12 PM & 7 PM)');
 
@@ -161,20 +179,6 @@ export const SubscriptionPlans: React.FC = () => {
   const [isMealDropdownOpen, setIsMealDropdownOpen] = useState(false);
   const [dropdownSearch, setDropdownSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsMealDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
 
   // Pre-Order for Tomorrow State
   const [tomorrowSlot, setTomorrowSlot] = useState<string>('Lunch (12:00 PM - 2:00 PM)');
@@ -193,6 +197,43 @@ export const SubscriptionPlans: React.FC = () => {
     calories: 0,
     image: '',
   });
+
+  // Dedicated Activation Popup Modal State
+  const [isActivationModalOpen, setIsActivationModalOpen] = useState(false);
+  const [selectedPlanForActivation, setSelectedPlanForActivation] = useState<PlanTier | null>(null);
+  const [activationCycle, setActivationCycle] = useState<'tomorrow' | 'weekly' | 'monthly'>('weekly');
+  const [activationGoalId, setActivationGoalId] = useState<string>('muscle_gain');
+  const [activationDiet, setActivationDiet] = useState<string>('High Protein');
+  const [activationSlot, setActivationSlot] = useState<string>('Lunch & Dinner (12 PM & 7 PM)');
+  
+  // Checkout Form Details in Modal
+  const [custName, setCustName] = useState(user?.name || '');
+  const [custPhone, setCustPhone] = useState(user?.phone || '');
+  const [custAddress, setCustAddress] = useState(user?.address || '');
+  const [isActivating, setIsActivating] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      if (!custName && user.name) setCustName(user.name);
+      if (!custPhone && user.phone) setCustPhone(user.phone);
+      if (!custAddress && user.address) setCustAddress(user.address);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsMealDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+    void loadMyOrders();
+  }, [loadProducts, loadMyOrders]);
 
   const TOMORROW_MEALS = [
     {
@@ -228,131 +269,223 @@ export const SubscriptionPlans: React.FC = () => {
     day: 'numeric',
   });
 
-  const handleBookForTomorrow = () => {
-    if (!selectedTomorrowMeal.name || selectedTomorrowMeal.price === 0) {
-      toast.error('Please select a meal for tomorrow first!');
+  // Check if current user has an active subscription
+  const activeSubOrder = useMemo(() => {
+    return orders.find((o) => {
+      const st = (o.status || '').toLowerCase();
+      if (st.includes('cancel') || st.includes('refund')) return false;
+      const isSub =
+        (o.itemsSummary && (
+          o.itemsSummary.toLowerCase().includes('plan') ||
+          o.itemsSummary.toLowerCase().includes('subscription') ||
+          o.itemsSummary.toLowerCase().includes('weekly') ||
+          o.itemsSummary.toLowerCase().includes('monthly') ||
+          o.itemsSummary.toLowerCase().includes('shred')
+        )) ||
+        (o.itemsList && o.itemsList.some((item) => {
+          const t = (item.title || '').toLowerCase();
+          return t.includes('plan') || t.includes('sub') || t.includes('weekly') || t.includes('monthly');
+        }));
+      return isSub;
+    });
+  }, [orders]);
+
+  // Open the Subscription Activation Popup Modal
+  const handleOpenSubscribeModal = (plan: PlanTier, cycleOverride?: 'tomorrow' | 'weekly' | 'monthly') => {
+    const cycle = cycleOverride || billingCycle;
+    setSelectedPlanForActivation(plan);
+    setActivationCycle(cycle);
+    setActivationDiet(selectedDiet);
+    setActivationSlot(cycle === 'tomorrow' ? tomorrowSlot : selectedSlot);
+    setActivationGoalId(macroProfile.goal || (plan.id === 'plan-shred-gain' ? 'muscle_gain' : 'weight_loss'));
+    if (user) {
+      setCustName(user.name || '');
+      setCustPhone(user.phone || '');
+      setCustAddress(user.address || '');
+    }
+    setIsActivationModalOpen(true);
+  };
+
+  // Confirm and directly activate the subscription (NO BASKET ROUTING)
+  const handleConfirmAndActivate = async () => {
+    if (!selectedPlanForActivation) return;
+
+    if (!custName.trim()) {
+      toast.error('Please provide your full name');
       return;
     }
-    const preOrderProduct: Product = {
-      id: `preorder-${selectedTomorrowMeal.id}-${Date.now()}`,
-      handle: `preorder-${selectedTomorrowMeal.id}`,
-      title: `${selectedTomorrowMeal.name} (Pre-Booked for Tomorrow)`,
-      productType: 'Pre-Order Delivery',
-      tags: ['Pre-Order', 'Tomorrow Delivery', tomorrowSlot],
-      description: `Scheduled Dispatch: Tomorrow (${formattedTomorrow}) during ${tomorrowSlot}\nProtein: ${selectedTomorrowMeal.protein}g | Calories: ${selectedTomorrowMeal.calories} kcal`,
-      featuredImage: { url: selectedTomorrowMeal.image, altText: selectedTomorrowMeal.name },
-      images: [{ url: selectedTomorrowMeal.image, altText: selectedTomorrowMeal.name }],
-      priceRange: { minVariantPrice: { amount: selectedTomorrowMeal.price.toString(), currencyCode: 'INR' } },
-      variants: [{ id: `var-${Date.now()}`, title: `Tomorrow (${tomorrowSlot})`, price: { amount: selectedTomorrowMeal.price.toString(), currencyCode: 'INR' }, availableForSale: true }],
-      nutrition: { protein: selectedTomorrowMeal.protein, calories: selectedTomorrowMeal.calories, carbs: 45, fat: 14, fiber: 8 },
-      prepTime: `Tomorrow (${tomorrowSlot})`,
-    };
+    if (!custPhone.trim()) {
+      toast.error('Please provide your mobile phone number for delivery updates');
+      return;
+    }
+    if (!custAddress.trim() || custAddress.trim().length < 5) {
+      toast.error('Please provide a complete delivery address');
+      return;
+    }
 
-    addItem(preOrderProduct);
-    toast.success(`Pre-Booked for Tomorrow (${formattedTomorrow})! 🎉`, {
-      description: `${selectedTomorrowMeal.name} reserved for ${tomorrowSlot} dispatch`,
-    });
-    openCart();
-  };
+    setIsActivating(true);
 
-  // Modal State for asking Goal upon clicking Subscribe
-  const [pendingPlan, setPendingPlan] = useState<PlanTier | null>(null);
-  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
-  const [selectedGoalId, setSelectedGoalId] = useState<string>('weight_loss');
+    try {
+      const plan = selectedPlanForActivation;
+      const isTomorrow = activationCycle === 'tomorrow';
+      const isMonthly = activationCycle === 'monthly';
+      const price = isTomorrow ? plan.tomorrowPrice : (isMonthly ? plan.monthlyPrice : plan.weeklyPrice);
+      const durationLabel = isTomorrow
+        ? `Single-Day Pre-Order (${formattedTomorrow})`
+        : isMonthly
+        ? '30-Day Monthly'
+        : '7-Day Weekly';
 
-  const handleSubscribe = (plan: PlanTier) => {
-    // Determine default pre-selected goal based on macro profile or plan
-    const initialGoal = macroProfile.goal || (plan.id === 'plan-shred-gain' ? 'muscle_gain' : 'weight_loss');
-    setSelectedGoalId(initialGoal);
-    setPendingPlan(plan);
-    setIsGoalModalOpen(true);
-  };
+      const goal = FITNESS_GOALS.find((g) => g.id === activationGoalId) || FITNESS_GOALS[0];
 
-  const confirmSubscriptionWithGoal = (goalObj?: FitnessGoalOption) => {
-    if (!pendingPlan) return;
-    const plan = pendingPlan;
-    const goal = goalObj || FITNESS_GOALS.find((g) => g.id === selectedGoalId) || FITNESS_GOALS[0];
+      // Update user & macro store
+      updateUser({
+        name: custName,
+        phone: custPhone,
+        address: custAddress,
+        dietaryPreferences: [activationDiet],
+      });
+      setMacroProfile({ goal: goal.id as any });
 
-    // Sync user macro profile
-    setMacroProfile({ goal: goal.id as any });
+      upsertCustomer({
+        name: custName,
+        email: user?.email,
+        phone: custPhone,
+        address: custAddress,
+        dietary: [activationDiet],
+        spentAmount: price,
+      });
 
-    const isTomorrow = billingCycle === 'tomorrow';
-    const isMonthly = billingCycle === 'monthly';
-    const price = isTomorrow ? plan.tomorrowPrice : (isMonthly ? plan.monthlyPrice : plan.weeklyPrice);
-    const duration = isTomorrow ? `Single-Day Pre-Order (${formattedTomorrow})` : (isMonthly ? '30-Day Monthly' : '7-Day Weekly');
+      const subOrderNo = `BKL-SUB-${Math.floor(100 + Math.random() * 900)}`;
+      const subTitle = `Brokole ${plan.name} (${durationLabel})`;
+      const subNotes = `${goal.label} Goal Plan | ${activationDiet} | ${activationSlot}`;
 
-    const customSubscriptionProduct: Product = {
-      id: `sub-${plan.id}-${billingCycle}-${goal.id}`,
-      handle: `subscription-${plan.id}`,
-      title: `Brokole ${plan.name} (${duration})`,
-      productType: isTomorrow ? 'Pre-Order Delivery' : 'Meal Subscription',
-      tags: [
-        isTomorrow ? 'Pre-Order' : 'Subscription',
-        'Meal Plan',
-        plan.name,
-        selectedDiet,
-        goal.label,
-        ...(isTomorrow ? ['Tomorrow Delivery', formattedTomorrow] : []),
-      ],
-      description: `${plan.name} (${duration})\n\nPrimary Fitness Goal: ${goal.label} (${goal.badge})\nDietary Focus: ${selectedDiet}\nDelivery Window: ${selectedSlot}\nDaily Protein Target: ${plan.proteinPerDay}g/day\n\nFeatures:\n` + plan.features.join('\n'),
-      featuredImage: {
-        url: '/images/grilled_chicken_bowl.png',
-        altText: plan.name,
-      },
-      images: [{ url: '/images/grilled_chicken_bowl.png', altText: plan.name }],
-      priceRange: {
-        minVariantPrice: {
-          amount: price.toString(),
-          currencyCode: 'INR',
-        },
-      },
-      variants: [
-        {
-          id: `variant-sub-${plan.id}-${goal.id}`,
-          title: `${duration} Plan (${goal.label})`,
-          price: { amount: price.toString(), currencyCode: 'INR' },
-          availableForSale: true,
-        },
-      ],
-      nutrition: {
-        calories: plan.mealsPerDay * 450,
-        protein: plan.proteinPerDay,
-        carbs: plan.mealsPerDay * 35,
-        fat: plan.mealsPerDay * 12,
-        fiber: plan.mealsPerDay * 6,
-      },
-      prepTime: isTomorrow ? `Tomorrow Dispatch (${formattedTomorrow})` : 'Daily Fresh Delivery',
-    };
+      // Create live order
+      const newOrder = addOrder({
+        id: subOrderNo as any,
+        userId: user?.id || `usr-${Date.now()}`,
+        userEmail: user?.email || `${custName.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
+        customerName: custName,
+        customerPhone: custPhone,
+        customerAddress: custAddress,
+        itemsSummary: subTitle,
+        itemsList: [
+          {
+            title: subTitle,
+            quantity: 1,
+            price,
+          },
+        ],
+        totalAmount: price,
+        proteinGrams: plan.proteinPerDay,
+        calories: plan.caloriesPerDay,
+        status: 'Preparing',
+      });
 
-    addItem(customSubscriptionProduct);
-    toast.success(isTomorrow ? `Pre-Booked for Tomorrow! 🎉` : `Subscribed to ${plan.name}! 🎉`, {
-      description: `Goal: ${goal.label} • ${duration} Plan (${formatCurrency(price)}) added to cart`,
-    });
+      const fullOrderPayload = {
+        id: subOrderNo,
+        order_no: subOrderNo,
+        serverId: subOrderNo,
+        userId: user?.id || `usr-${Date.now()}`,
+        userEmail: user?.email || `${custName.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
+        customerName: custName,
+        customer_name: custName,
+        customerPhone: custPhone,
+        customerAddress: custAddress,
+        itemsSummary: subTitle,
+        itemsList: [{ title: subTitle, quantity: 1, price }],
+        lines: [{ name_snapshot: subTitle, quantity: 1, unit_price: String(price), line_total: String(price), notes: goal.label }],
+        totalAmount: price,
+        total: price,
+        proteinGrams: plan.proteinPerDay,
+        calories: plan.caloriesPerDay,
+        status: 'placed',
+        channel: 'subscription',
+        notes: subNotes,
+        skipped_days: [],
+        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      };
 
-    setIsGoalModalOpen(false);
-    setPendingPlan(null);
-    openCart();
+      // Push to local disk sync & multi-cloud store in real time
+      void pushLocalOrderSync(fullOrderPayload);
+      void pushCloudOrder(fullOrderPayload);
+
+      toast.success(`🎉 ${plan.name} Activated Successfully!`, {
+        description: `Order #${subOrderNo} confirmed. View your active meal calendar & skip days in your account.`,
+        duration: 5000,
+      });
+
+      setIsActivationModalOpen(false);
+      setSelectedPlanForActivation(null);
+
+      // Navigate to Account page with calendar active
+      navigate({ to: '/account' });
+    } catch (err: any) {
+      toast.error('Could not activate subscription: ' + (err?.message || 'Please try again'));
+    } finally {
+      setIsActivating(false);
+    }
   };
 
   return (
     <div className="space-y-8">
-      {/* Banner */}
-      <div className="bg-[var(--color-primary)] text-[var(--color-text-on-primary)] rounded-3xl p-6 sm:p-10 shadow-card relative overflow-hidden carved-box">
-        <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-[var(--color-primary-muted)] opacity-30 blur-2xl pointer-events-none" />
-        <div className="relative z-10 max-w-2xl text-center sm:text-left">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-2xl bg-[var(--color-primary-muted)] text-[var(--color-accent)] text-xs font-black mb-3 border border-[var(--color-accent-glow)]">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Brokole Subscription Studio</span>
+      {/* 🌟 HERO BANNER / ACTIVE SUBSCRIPTION STATUS */}
+      {activeSubOrder ? (
+        <div className="bg-gradient-to-r from-purple-950 via-neutral-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-card relative overflow-hidden border border-purple-500/30">
+          <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-purple-500/20 blur-3xl pointer-events-none" />
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2 max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/30 text-purple-200 text-xs font-black border border-purple-500/40">
+                <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                <span>ACTIVE VIP SUBSCRIPTION • #{activeSubOrder.id}</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                {activeSubOrder.itemsSummary || 'Brokole Shred & Gain Pro'}
+              </h2>
+              <p className="text-xs sm:text-sm text-purple-200/90 font-medium">
+                Your daily chef-crafted macro meals are active. You can pause or skip upcoming days anytime.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                  🔥 {activeSubOrder.proteinGrams || 75}g Daily Protein
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-200 font-bold border border-purple-500/30">
+                  🚚 Free Priority Dispatch
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+              <Link
+                to="/account"
+                className="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer carved-btn"
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Open Meal Calendar & Skip Days</span>
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
-            Put Your Nutrition on Autopilot <br className="hidden sm:inline" />
-            <span className="text-[var(--color-accent)]">Save Up to 25% Every Month</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-emerald-100 font-medium mt-2 leading-relaxed max-w-xl">
-            Fresh chef-prepared, dietitian-formulated meals delivered directly to your doorstep with pre-order dispatch. Pause, swap meals, or cancel anytime with 1 click.
-          </p>
         </div>
-      </div>
+      ) : (
+        <div className="bg-[var(--color-primary)] text-[var(--color-text-on-primary)] rounded-3xl p-6 sm:p-10 shadow-card relative overflow-hidden carved-box">
+          <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-[var(--color-primary-muted)] opacity-30 blur-2xl pointer-events-none" />
+          <div className="relative z-10 max-w-2xl text-center sm:text-left">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-2xl bg-[var(--color-primary-muted)] text-[var(--color-accent)] text-xs font-black mb-3 border border-[var(--color-accent-glow)]">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Brokole Subscription Studio</span>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+              Put Your Nutrition on Autopilot <br className="hidden sm:inline" />
+              <span className="text-[var(--color-accent)]">Save Up to 25% Every Month</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-emerald-100 font-medium mt-2 leading-relaxed max-w-xl">
+              Fresh chef-prepared, dietitian-formulated meals delivered directly to your doorstep. Pause, skip days, or modify anytime with 1 click.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 🚀 BOOK FOR TOMORROW PRE-ORDER SECTION */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 shadow-card relative space-y-6 carved-box">
@@ -525,10 +658,9 @@ export const SubscriptionPlans: React.FC = () => {
                   </div>
                 </button>
 
-                {/* Dropdown Popover (Opens Upwards Above Button) */}
+                {/* Dropdown Popover */}
                 {isMealDropdownOpen && (
                   <div className="absolute right-0 bottom-full mb-2 w-full sm:w-80 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-2xl z-[100] overflow-hidden animate-fade-in carved-box">
-                    {/* Filter Search */}
                     <div className="p-2 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-hover)]">
                       <div className="relative">
                         <Search className="size-3.5 text-[var(--color-text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -542,7 +674,6 @@ export const SubscriptionPlans: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Meal Options Scroll View */}
                     <div className="max-h-64 overflow-y-auto no-scrollbar p-1.5 space-y-1">
                       {storeProducts
                         .filter((p) =>
@@ -567,9 +698,6 @@ export const SubscriptionPlans: React.FC = () => {
                                 });
                                 setIsMealDropdownOpen(false);
                                 setDropdownSearch('');
-                                toast.success(`Selected "${p.title}" for Tomorrow!`, {
-                                  description: `${p.nutrition.protein}g Protein • ${formatCurrency(mealPrice)}`,
-                                });
                               }}
                               className={`w-full p-2 rounded-xl text-left transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
                                 isSelected
@@ -610,10 +738,28 @@ export const SubscriptionPlans: React.FC = () => {
                 )}
               </div>
 
-              {/* Action Button */}
+              {/* Action Button - Opens dedicated popup */}
               <button
                 type="button"
-                onClick={handleBookForTomorrow}
+                onClick={() => {
+                  const fallbackPlan: PlanTier = {
+                    id: 'plan-single-preorder',
+                    name: selectedTomorrowMeal.name ? `${selectedTomorrowMeal.name} (Tomorrow Delivery)` : 'Tomorrow Single-Day Meal',
+                    tagline: `Pre-booked for tomorrow dispatch (${formattedTomorrow})`,
+                    tomorrowPrice: selectedTomorrowMeal.price || 360,
+                    weeklyPrice: 1899,
+                    monthlyPrice: 5999,
+                    mealsPerDay: 1,
+                    proteinPerDay: selectedTomorrowMeal.protein || 48,
+                    caloriesPerDay: selectedTomorrowMeal.calories || 580,
+                    features: [
+                      `Guaranteed dispatch tomorrow (${formattedTomorrow})`,
+                      `Delivery window: ${tomorrowSlot}`,
+                      'Hot & fresh dietitian-formulated meal',
+                    ],
+                  };
+                  handleOpenSubscribeModal(fallbackPlan, 'tomorrow');
+                }}
                 className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text-on-accent)] font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.99] carved-btn shrink-0"
               >
                 <span>
@@ -837,10 +983,10 @@ export const SubscriptionPlans: React.FC = () => {
 
               </div>
 
-              {/* Action Button */}
+              {/* Action Button - Opens Direct Activation Popup (NO BASKET) */}
               <div className="pt-6 border-t border-[var(--color-border-subtle)] mt-6">
                 <button
-                  onClick={() => handleSubscribe(plan)}
+                  onClick={() => handleOpenSubscribeModal(plan)}
                   className={`w-full py-4 px-4 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn ${
                     isTomorrow || plan.popular
                       ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] hover:bg-[var(--color-accent-hover)]'
@@ -890,31 +1036,35 @@ export const SubscriptionPlans: React.FC = () => {
         </div>
       </div>
 
-      {/* Fitness Goal Selection Modal */}
-      {isGoalModalOpen && pendingPlan && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative space-y-6 animate-fade-in carved-box">
+      {/* 🚀 RESPONSIVE SUBSCRIPTION ACTIVATION POPUP MODAL (CONSTRAINED TO VIEWPORT, NO BASKET) */}
+      {isActivationModalOpen && selectedPlanForActivation && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden animate-fade-in carved-box">
             
-            {/* Modal Header */}
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-subtle)] pb-4">
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] text-xs font-black uppercase mb-1">
-                  <Target className="w-3.5 h-3.5" />
-                  <span>Tailor Your Plan Goal</span>
+            {/* 1. Modal Fixed Header */}
+            <div className="p-4 sm:p-5 border-b border-[var(--color-border-subtle)] flex items-start justify-between gap-3 bg-[var(--color-surface)] shrink-0">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 text-[10px] font-black uppercase">
+                  <Sparkles className="w-3 h-3" />
+                  <span>VIP Plan Activation</span>
                 </div>
-                <h3 className="text-xl font-black text-[var(--color-text-main)] tracking-tight">
-                  What is your primary fitness goal?
+                <h3 className="text-lg sm:text-xl font-black text-[var(--color-text-main)] tracking-tight">
+                  {selectedPlanForActivation.name}
                 </h3>
-                <p className="text-xs text-[var(--color-text-muted)] font-medium mt-1">
-                  We'll customize your <strong className="text-[var(--color-primary)] font-bold">{pendingPlan.name}</strong> meal portions and macro distribution to match your exact target.
+                <p className="text-[11px] text-[var(--color-text-muted)] font-medium">
+                  {activationCycle === 'tomorrow'
+                    ? `Single-Day Pre-Order for Tomorrow (${formattedTomorrow})`
+                    : activationCycle === 'monthly'
+                    ? '30-Day Monthly VIP Meal Schedule'
+                    : '7-Day Weekly Flex Meal Schedule'}
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => {
-                  setIsGoalModalOpen(false);
-                  setPendingPlan(null);
+                  setIsActivationModalOpen(false);
+                  setSelectedPlanForActivation(null);
                 }}
                 className="p-2 rounded-2xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-all cursor-pointer shrink-0"
               >
@@ -922,76 +1072,234 @@ export const SubscriptionPlans: React.FC = () => {
               </button>
             </div>
 
-            {/* Goal Choice Options */}
-            <div className="space-y-3">
-              {FITNESS_GOALS.map((goal) => {
-                const Icon = goal.icon;
-                const isSelected = selectedGoalId === goal.id;
-                return (
+            {/* 2. Scrollable Body (Guaranteed to stay within Viewport) */}
+            <div className="overflow-y-auto flex-1 p-4 sm:p-6 space-y-5 no-scrollbar">
+              
+              {/* Duration Switcher inside modal */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-black uppercase tracking-wider text-[var(--color-primary)] block">
+                  1. Plan Duration
+                </label>
+                <div className="grid grid-cols-3 gap-2">
                   <button
-                    key={goal.id}
                     type="button"
-                    onClick={() => confirmSubscriptionWithGoal(goal)}
-                    className={`w-full p-4 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3.5 carved-btn ${
-                      isSelected
-                        ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] ring-2 ring-[var(--color-primary-muted)]'
-                        : 'bg-[var(--color-surface-hover)] border-[var(--color-border)] hover:border-[var(--color-primary-muted)]'
+                    onClick={() => setActivationCycle('tomorrow')}
+                    className={`py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      activationCycle === 'tomorrow'
+                        ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] font-black border-transparent shadow-xs'
+                        : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border-[var(--color-border)]'
                     }`}
                   >
-                    <div
-                      className={`p-2.5 rounded-2xl shrink-0 mt-0.5 ${
-                        isSelected
-                          ? 'bg-[var(--color-primary)] text-white'
-                          : 'bg-[var(--color-surface)] text-[var(--color-primary)] border border-[var(--color-border)]'
-                      }`}
-                    >
-                      <Icon className="w-5 h-5" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-black text-sm text-[var(--color-text-main)] truncate">
-                          {goal.label}
-                        </span>
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/80 border border-neutral-200 text-neutral-800 shrink-0">
-                          {goal.badge}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[var(--color-text-muted)] font-medium mt-1 leading-relaxed">
-                        {goal.desc}
-                      </p>
-                    </div>
-
-                    {isSelected && (
-                      <div className="w-5 h-5 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center shrink-0 font-bold text-xs mt-1">
-                        ✓
-                      </div>
-                    )}
+                    <span className="text-xs font-extrabold block">Tomorrow</span>
+                    <span className="text-[10px] opacity-80 block">{formatCurrency(selectedPlanForActivation.tomorrowPrice)}</span>
                   </button>
-                );
-              })}
+
+                  <button
+                    type="button"
+                    onClick={() => setActivationCycle('weekly')}
+                    className={`py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      activationCycle === 'weekly'
+                        ? 'bg-[var(--color-primary)] text-white font-black border-transparent shadow-xs'
+                        : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border-[var(--color-border)]'
+                    }`}
+                  >
+                    <span className="text-xs font-extrabold block">7-Day Flex</span>
+                    <span className="text-[10px] opacity-80 block">{formatCurrency(selectedPlanForActivation.weeklyPrice)}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActivationCycle('monthly')}
+                    className={`py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      activationCycle === 'monthly'
+                        ? 'bg-[var(--color-primary)] text-white font-black border-transparent shadow-xs'
+                        : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border-[var(--color-border)]'
+                    }`}
+                  >
+                    <span className="text-xs font-extrabold block">30-Day VIP</span>
+                    <span className="text-[10px] opacity-80 block">{formatCurrency(selectedPlanForActivation.monthlyPrice)}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Fitness Goal Picker */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-black uppercase tracking-wider text-[var(--color-primary)] block">
+                  2. Select Primary Fitness Goal
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {FITNESS_GOALS.map((g) => {
+                    const Icon = g.icon;
+                    const isSelected = activationGoalId === g.id;
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => setActivationGoalId(g.id)}
+                        className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 carved-btn ${
+                          isSelected
+                            ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] ring-2 ring-[var(--color-primary-muted)]'
+                            : 'bg-[var(--color-surface-hover)] border-[var(--color-border)]'
+                        }`}
+                      >
+                        <div className={`p-2 rounded-xl shrink-0 ${isSelected ? 'bg-[var(--color-primary)] text-white' : 'bg-white text-[var(--color-primary)]'}`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs font-black text-[var(--color-text-main)] block truncate">
+                            {g.label}
+                          </span>
+                          <span className="text-[10px] text-[var(--color-text-muted)] font-medium block truncate">
+                            {g.badge}
+                          </span>
+                        </div>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Dietary & Dispatch Window */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)] block">
+                    Dietary Focus
+                  </label>
+                  <select
+                    value={activationDiet}
+                    onChange={(e) => setActivationDiet(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                  >
+                    <option value="High Protein">High Protein</option>
+                    <option value="Keto / Low Carb">Keto / Low Carb</option>
+                    <option value="Pure Vegan">Pure Vegan</option>
+                    <option value="Balanced Fit">Balanced Fit</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)] block">
+                    Delivery Slot
+                  </label>
+                  <select
+                    value={activationSlot}
+                    onChange={(e) => setActivationSlot(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                  >
+                    <option value="Lunch & Dinner (12 PM & 7 PM)">Lunch & Dinner (12 PM & 7 PM)</option>
+                    <option value="Morning & Evening (8 AM & 6 PM)">Morning & Evening (8 AM & 6 PM)</option>
+                    <option value="All-Day 3-Meal Dispatch (8 AM, 1 PM, 7 PM)">All-Day 3-Meal Dispatch</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Customer Contact & Delivery Address Form */}
+              <div className="bg-[var(--color-surface-hover)] rounded-2xl p-4 border border-[var(--color-border)] space-y-3">
+                <span className="text-[11px] font-black uppercase tracking-wider text-[var(--color-primary)] flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>3. Delivery & Contact Details</span>
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-[var(--color-text-muted)] uppercase mb-1">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={custName}
+                      onChange={(e) => setCustName(e.target.value)}
+                      placeholder="e.g. Alex Morgan"
+                      className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-[var(--color-text-muted)] uppercase mb-1">
+                      Mobile Number *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={custPhone}
+                      onChange={(e) => setCustPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-[var(--color-text-muted)] uppercase mb-1">
+                    Complete Delivery Address *
+                  </label>
+                  <textarea
+                    rows={2}
+                    required
+                    value={custAddress}
+                    onChange={(e) => setCustAddress(e.target.value)}
+                    placeholder="Flat / Building, Street, Area, Bengaluru - 560001"
+                    className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-medium text-[var(--color-text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                  />
+                </div>
+              </div>
+
+              {/* Order Summary & Price Breakdown */}
+              <div className="bg-purple-50/70 rounded-2xl p-4 border border-purple-200/80 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-neutral-600 font-semibold">
+                  <span>Plan Amount ({activationCycle === 'tomorrow' ? 'Single-Day Pre-Order' : activationCycle === 'monthly' ? '30 Days' : '7 Days'}):</span>
+                  <span className="font-bold text-neutral-900">
+                    {formatCurrency(activationCycle === 'tomorrow' ? selectedPlanForActivation.tomorrowPrice : activationCycle === 'monthly' ? selectedPlanForActivation.monthlyPrice : selectedPlanForActivation.weeklyPrice)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-neutral-600 font-semibold">
+                  <span>VIP Pre-Order Delivery:</span>
+                  <span className="font-bold text-emerald-700 uppercase">FREE (₹0)</span>
+                </div>
+                <div className="flex items-center justify-between text-neutral-600 font-semibold">
+                  <span>GST & Kitchen Packaging:</span>
+                  <span className="font-bold text-neutral-900">Included</span>
+                </div>
+                <div className="flex items-center justify-between text-sm font-black text-purple-950 pt-2 border-t border-purple-200">
+                  <span>Total Amount Payable:</span>
+                  <span className="text-base font-black text-purple-950">
+                    {formatCurrency(activationCycle === 'tomorrow' ? selectedPlanForActivation.tomorrowPrice : activationCycle === 'monthly' ? selectedPlanForActivation.monthlyPrice : selectedPlanForActivation.weeklyPrice)}
+                  </span>
+                </div>
+              </div>
+
             </div>
 
-            {/* Modal Actions */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+            {/* 3. Sticky Bottom Action Footer */}
+            <div className="p-4 sm:p-5 bg-[var(--color-surface-hover)] border-t border-[var(--color-border)] flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => {
-                  setIsGoalModalOpen(false);
-                  setPendingPlan(null);
+                  setIsActivationModalOpen(false);
+                  setSelectedPlanForActivation(null);
                 }}
-                className="w-full sm:w-auto px-5 py-3 rounded-2xl border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] text-xs font-bold cursor-pointer"
+                className="px-4 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
 
               <button
                 type="button"
-                onClick={() => confirmSubscriptionWithGoal()}
-                className="w-full sm:w-1/2 py-3.5 px-5 rounded-2xl bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
+                disabled={isActivating}
+                onClick={handleConfirmAndActivate}
+                className="py-3 px-6 rounded-2xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn disabled:opacity-60"
               >
-                <span>Confirm Goal & Subscribe</span>
-                <ArrowRight className="w-4 h-4" />
+                {isActivating ? (
+                  <span>Activating Subscription…</span>
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Confirm & Activate Subscription</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </div>
 
@@ -1001,8 +1309,8 @@ export const SubscriptionPlans: React.FC = () => {
 
       {/* Full Live Menu Picker Modal */}
       {isMenuModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-6 sm:p-8 max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl relative space-y-4 animate-fade-in carved-box">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-5 sm:p-7 max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl relative space-y-4 animate-fade-in carved-box">
             
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-4 shrink-0">
