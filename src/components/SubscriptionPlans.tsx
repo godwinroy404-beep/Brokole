@@ -506,25 +506,25 @@ export const SubscriptionPlans: React.FC = () => {
     <div className="space-y-8">
       {/* 🌟 HERO BANNER / ACTIVE SUBSCRIPTION STATUS */}
       {activeSubOrder ? (
-        <div className="bg-gradient-to-r from-purple-950 via-neutral-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-card relative overflow-hidden border border-purple-500/30">
-          <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-purple-500/20 blur-3xl pointer-events-none" />
+        <div className="bg-gradient-to-r from-[var(--color-primary)] via-emerald-950 to-neutral-900 text-white rounded-3xl p-6 sm:p-8 shadow-card relative overflow-hidden border border-[var(--color-primary-muted)]/40 carved-box">
+          <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-[var(--color-accent)] opacity-15 blur-3xl pointer-events-none" />
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-2 max-w-xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/30 text-purple-200 text-xs font-black border border-purple-500/40">
-                <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--color-primary-light)]/20 text-emerald-200 text-xs font-black border border-emerald-400/30">
+                <Sparkles className="w-3.5 h-3.5 text-[var(--color-accent)]" />
                 <span>ACTIVE VIP SUBSCRIPTION • #{activeSubOrder.id}</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
                 {activeSubOrder.itemsSummary || 'Brokole Shred & Gain Pro'}
               </h2>
-              <p className="text-xs sm:text-sm text-purple-200/90 font-medium">
+              <p className="text-xs sm:text-sm text-emerald-100/90 font-medium">
                 Your daily chef-crafted macro meals are active. You can pause or skip upcoming days anytime.
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
                 <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
                   🔥 {activeSubOrder.proteinGrams || 75}g Daily Protein
                 </span>
-                <span className="px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-200 font-bold border border-purple-500/30">
+                <span className="px-2.5 py-1 rounded-lg bg-[var(--color-accent-light)]/15 text-[var(--color-accent)] font-bold border border-[var(--color-accent)]/30">
                   🚚 Free Priority Dispatch
                 </span>
               </div>
@@ -533,7 +533,7 @@ export const SubscriptionPlans: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
               <Link
                 to="/account"
-                className="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer carved-btn"
+                className="px-5 py-3 rounded-2xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text-on-accent)] font-black text-xs transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer carved-btn"
               >
                 <Calendar className="w-4 h-4" />
                 <span>Open Meal Calendar & Skip Days</span>
@@ -1119,13 +1119,13 @@ export const SubscriptionPlans: React.FC = () => {
             <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border-subtle)] pb-4">
               <div className="space-y-1.5">
                 {planWarningModal.type === 'extend' ? (
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black uppercase">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-700 animate-pulse" />
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-800 border border-amber-500/30 text-xs font-black uppercase">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
                     <span>Active Subscription Detected</span>
                   </div>
                 ) : (
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 text-purple-900 border border-purple-300 text-xs font-black uppercase">
-                    <RefreshCw className="w-3.5 h-3.5 text-purple-700 animate-spin" />
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--color-primary-muted)]/30 text-xs font-black uppercase">
+                    <RefreshCw className="w-3.5 h-3.5 text-[var(--color-primary)] animate-spin" />
                     <span>Switch Subscription Plan</span>
                   </div>
                 )}
@@ -1164,7 +1164,7 @@ export const SubscriptionPlans: React.FC = () => {
                     Order #{planWarningModal.activeSub.id} • {planWarningModal.activeSub.proteinGrams || 75}g Protein / Day
                   </span>
                 </div>
-                <span className="px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
+                <span className="px-2.5 py-1 rounded-xl bg-[var(--color-primary-light)] text-[var(--color-primary)] font-black text-[10px] uppercase border border-[var(--color-primary-muted)]/20">
                   ACTIVE VIP
                 </span>
               </div>
@@ -1173,19 +1173,19 @@ export const SubscriptionPlans: React.FC = () => {
             {/* Content for Extension Mode */}
             {planWarningModal.type === 'extend' ? (
               <div className="space-y-4">
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 space-y-2 text-xs">
-                  <div className="flex items-center justify-between font-bold text-emerald-950">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4 text-emerald-700" />
+                <div className="bg-[var(--color-primary-light)]/70 border border-[var(--color-primary)]/20 rounded-2xl p-4 space-y-2 text-xs">
+                  <div className="flex items-center justify-between font-bold text-[var(--color-text-main)]">
+                    <span className="flex items-center gap-1.5 text-[var(--color-primary)]">
+                      <Calendar className="w-4 h-4" />
                       <span>Extension Duration:</span>
                     </span>
-                    <span className="font-black text-emerald-800 text-sm">
+                    <span className="font-black text-[var(--color-primary)] text-sm">
                       +{planWarningModal.cycle === 'monthly' ? '30 Days' : planWarningModal.cycle === 'tomorrow' ? '1 Day' : '7 Days'}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between font-bold text-emerald-950 pt-1 border-t border-emerald-500/20">
+                  <div className="flex items-center justify-between font-bold text-[var(--color-text-main)] pt-1 border-t border-[var(--color-primary)]/20">
                     <span>Extension Amount:</span>
-                    <span className="font-black text-emerald-900 text-sm">
+                    <span className="font-black text-[var(--color-primary)] text-sm">
                       {formatCurrency(
                         planWarningModal.cycle === 'monthly'
                           ? planWarningModal.plan.monthlyPrice
@@ -1195,7 +1195,7 @@ export const SubscriptionPlans: React.FC = () => {
                       )}
                     </span>
                   </div>
-                  <p className="text-[11px] text-emerald-800/90 font-medium pt-1">
+                  <p className="text-[11px] text-[var(--color-text-muted)] font-medium pt-1">
                     ✨ Extends your active meal schedule without creating duplicate orders or interrupting existing delivery days.
                   </p>
                 </div>
@@ -1204,7 +1204,7 @@ export const SubscriptionPlans: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleConfirmExtension(planWarningModal.plan, planWarningModal.cycle)}
-                    className="flex-1 py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
+                    className="flex-1 py-3.5 px-4 rounded-2xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
                   >
                     <TrendingUp className="w-4 h-4" />
                     <span>
@@ -1230,24 +1230,24 @@ export const SubscriptionPlans: React.FC = () => {
             ) : (
               /* Content for Plan Switch Mode */
               <div className="space-y-4">
-                <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 space-y-2 text-xs text-neutral-700">
+                <div className="bg-[var(--color-primary-light)]/70 border border-[var(--color-primary)]/20 rounded-2xl p-4 space-y-2 text-xs text-[var(--color-text-main)]">
                   <div className="flex items-center justify-between font-bold">
-                    <span className="text-purple-950 font-extrabold flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-purple-700" />
+                    <span className="text-[var(--color-primary)] font-extrabold flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-[var(--color-accent-hover)]" />
                       <span>New Target Plan:</span>
                     </span>
-                    <span className="font-black text-purple-900 text-sm">
+                    <span className="font-black text-[var(--color-primary)] text-sm">
                       {planWarningModal.plan.name}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-purple-200">
-                    <div className="bg-white/80 p-2.5 rounded-xl border border-purple-100">
-                      <span className="text-[10px] text-neutral-500 font-bold block">Daily Protein:</span>
-                      <span className="text-xs font-black text-emerald-700">{planWarningModal.plan.proteinPerDay}g / Day</span>
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--color-primary)]/20">
+                    <div className="bg-[var(--color-surface)] p-2.5 rounded-xl border border-[var(--color-border)]">
+                      <span className="text-[10px] text-[var(--color-text-muted)] font-bold block">Daily Protein:</span>
+                      <span className="text-xs font-black text-[var(--color-primary)]">{planWarningModal.plan.proteinPerDay}g / Day</span>
                     </div>
-                    <div className="bg-white/80 p-2.5 rounded-xl border border-purple-100">
-                      <span className="text-[10px] text-neutral-500 font-bold block">Plan Price:</span>
-                      <span className="text-xs font-black text-purple-950">
+                    <div className="bg-[var(--color-surface)] p-2.5 rounded-xl border border-[var(--color-border)]">
+                      <span className="text-[10px] text-[var(--color-text-muted)] font-bold block">Plan Price:</span>
+                      <span className="text-xs font-black text-[var(--color-text-main)]">
                         {formatCurrency(
                           planWarningModal.cycle === 'monthly'
                             ? planWarningModal.plan.monthlyPrice
@@ -1258,7 +1258,7 @@ export const SubscriptionPlans: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  <p className="text-[11px] text-purple-900 font-medium pt-1">
+                  <p className="text-[11px] text-[var(--color-text-muted)] font-medium pt-1">
                     🔄 Switching plans will automatically archive your previous subscription and activate your new {planWarningModal.plan.name} schedule.
                   </p>
                 </div>
@@ -1272,7 +1272,7 @@ export const SubscriptionPlans: React.FC = () => {
                       setPlanWarningModal(null);
                       handleOpenSubscribeModal(plan, cycle, 'switch');
                     }}
-                    className="flex-1 py-3.5 px-4 rounded-2xl bg-purple-700 hover:bg-purple-600 text-white font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
+                    className="flex-1 py-3.5 px-4 rounded-2xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
                   >
                     <RefreshCw className="w-4 h-4" />
                     <span>Switch to {planWarningModal.plan.name}</span>
@@ -1302,8 +1302,8 @@ export const SubscriptionPlans: React.FC = () => {
             {/* 1. Modal Fixed Header */}
             <div className="p-4 sm:p-5 border-b border-[var(--color-border-subtle)] flex items-start justify-between gap-3 bg-[var(--color-surface)] shrink-0">
               <div className="space-y-1">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 text-[10px] font-black uppercase">
-                  <Sparkles className="w-3 h-3" />
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] text-[10px] font-black uppercase border border-[var(--color-primary-muted)]/20">
+                  <Sparkles className="w-3 h-3 text-[var(--color-accent-hover)]" />
                   <span>VIP Plan Activation</span>
                 </div>
                 <h3 className="text-lg sm:text-xl font-black text-[var(--color-text-main)] tracking-tight">
@@ -1528,24 +1528,24 @@ export const SubscriptionPlans: React.FC = () => {
               </div>
 
               {/* Order Summary & Price Breakdown */}
-              <div className="bg-purple-50/70 rounded-2xl p-4 border border-purple-200/80 space-y-2 text-xs">
-                <div className="flex items-center justify-between text-neutral-600 font-semibold">
+              <div className="bg-[var(--color-primary-light)]/60 rounded-2xl p-4 border border-[var(--color-primary)]/20 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-[var(--color-text-muted)] font-semibold">
                   <span>Plan Amount ({activationCycle === 'tomorrow' ? 'Single-Day Pre-Order' : activationCycle === 'monthly' ? '30 Days' : '7 Days'}):</span>
-                  <span className="font-bold text-neutral-900">
+                  <span className="font-bold text-[var(--color-text-main)]">
                     {formatCurrency(activationCycle === 'tomorrow' ? selectedPlanForActivation.tomorrowPrice : activationCycle === 'monthly' ? selectedPlanForActivation.monthlyPrice : selectedPlanForActivation.weeklyPrice)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-neutral-600 font-semibold">
+                <div className="flex items-center justify-between text-[var(--color-text-muted)] font-semibold">
                   <span>VIP Pre-Order Delivery:</span>
-                  <span className="font-bold text-emerald-700 uppercase">FREE (₹0)</span>
+                  <span className="font-bold text-[var(--color-primary)] uppercase">FREE (₹0)</span>
                 </div>
-                <div className="flex items-center justify-between text-neutral-600 font-semibold">
+                <div className="flex items-center justify-between text-[var(--color-text-muted)] font-semibold">
                   <span>GST & Kitchen Packaging:</span>
-                  <span className="font-bold text-neutral-900">Included</span>
+                  <span className="font-bold text-[var(--color-text-main)]">Included</span>
                 </div>
-                <div className="flex items-center justify-between text-sm font-black text-purple-950 pt-2 border-t border-purple-200">
+                <div className="flex items-center justify-between text-sm font-black text-[var(--color-primary)] pt-2 border-t border-[var(--color-primary)]/20">
                   <span>Total Amount Payable:</span>
-                  <span className="text-base font-black text-purple-950">
+                  <span className="text-base font-black text-[var(--color-primary)]">
                     {formatCurrency(activationCycle === 'tomorrow' ? selectedPlanForActivation.tomorrowPrice : activationCycle === 'monthly' ? selectedPlanForActivation.monthlyPrice : selectedPlanForActivation.weeklyPrice)}
                   </span>
                 </div>
