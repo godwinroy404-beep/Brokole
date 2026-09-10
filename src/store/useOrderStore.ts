@@ -6,6 +6,8 @@ import { useAuthStore } from './useAuthStore';
 import { pushLocalOrderSync, fetchLocalSyncOrders } from '../lib/localSync';
 import { pushCloudOrder, updateCloudOrderStatus, fetchCloudOrders } from '../lib/cloudOrderSync';
 
+import { deleteCloudOrder } from '@brokole/domain';
+
 export type OrderStatus =
   | 'New Order'
   | 'Preparing'
@@ -64,13 +66,19 @@ export interface Order {
   customerAddress: string;
   itemsSummary: string;
   itemsList?: OrderItem[];
+  lines?: any[];
+  notes?: string;
+  skipped_days?: string[];
+  channel?: string;
   totalAmount: number;
+  total?: number;
   proteinGrams: number;
   calories?: number;
   status: OrderStatus;
   createdAt: string;
   timeFormatted: string;
   isNew?: boolean;
+  deleted?: boolean;
 }
 
 interface OrderState {
@@ -81,6 +89,7 @@ interface OrderState {
   addOrder: (orderData: Partial<Order> & { customerName: string; totalAmount: number; itemsSummary: string }) => Order;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   deleteOrder: (orderId: string) => void;
+  extendSubscriptionOrder: (orderId: string, addedDays: number, additionalPrice: number, newSummary?: string) => Order | null;
   clearLatestPlacedOrder: () => void;
   simulateNewOrder: () => Order;
   resetOrders: () => void;
@@ -124,9 +133,10 @@ export const useOrderStore = create<OrderState>()(
       latestPlacedOrder: null,
 
       addOrder: (orderData) => {
-        const orderId = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+        const orderId = orderData.id || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
         const newOrder: Order = {
           id: orderId,
+          serverId: orderData.serverId || orderId,
           userId: orderData.userId,
           userEmail: orderData.userEmail,
           customerName: orderData.customerName,
@@ -134,24 +144,65 @@ export const useOrderStore = create<OrderState>()(
           customerAddress: orderData.customerAddress || 'Customer Address Provided',
           itemsSummary: orderData.itemsSummary,
           itemsList: orderData.itemsList || [],
+          lines: orderData.lines || (orderData.itemsList ? orderData.itemsList.map(i => ({ name_snapshot: i.title, quantity: i.quantity, unit_price: String(i.price), line_total: String(i.price * i.quantity) })) : []),
+          notes: orderData.notes,
+          skipped_days: orderData.skipped_days || [],
+          channel: orderData.channel || (orderData.itemsSummary.toLowerCase().includes('plan') || orderData.itemsSummary.toLowerCase().includes('sub') ? 'subscription' : 'online'),
           totalAmount: orderData.totalAmount,
+          total: orderData.totalAmount,
           proteinGrams: orderData.proteinGrams || 45,
           calories: orderData.calories || 520,
-          status: 'New Order',
-          createdAt: new Date().toISOString(),
-          timeFormatted: 'Just now',
+          status: orderData.status || 'New Order',
+          createdAt: orderData.createdAt || new Date().toISOString(),
+          timeFormatted: orderData.timeFormatted || 'Just now',
           isNew: true,
         };
 
-        set((state) => ({
-          orders: [newOrder, ...state.orders],
-          latestPlacedOrder: newOrder,
-        }));
+        set((state) => {
+          const filtered = state.orders.filter(
+            (o) => o.id !== orderId && o.serverId !== orderId && (!orderData.serverId || o.serverId !== orderData.serverId)
+          );
+          return {
+            orders: [newOrder, ...filtered],
+            latestPlacedOrder: newOrder,
+          };
+        });
 
         void pushLocalOrderSync(newOrder);
         void pushCloudOrder(newOrder);
 
         return newOrder;
+      },
+
+      extendSubscriptionOrder: (orderId, addedDays, additionalPrice, newSummary) => {
+        const state = get();
+        const target = state.orders.find((o) => o.id === orderId || o.serverId === orderId);
+        if (!target) return null;
+
+        const currentTotal = Number(target.totalAmount || target.total || 0);
+        const updatedTotal = currentTotal + additionalPrice;
+        const updatedSummary = newSummary || `${target.itemsSummary} (+${addedDays} Days Extended)`;
+        const updatedNotes = `${target.notes || ''} [Extended +${addedDays} Days on ${new Date().toLocaleDateString()}]`.trim();
+
+        const updatedOrder: Order = {
+          ...target,
+          itemsSummary: updatedSummary,
+          totalAmount: updatedTotal,
+          total: updatedTotal,
+          notes: updatedNotes,
+          status: 'Preparing',
+          isNew: false,
+        };
+
+        set((s) => ({
+          orders: s.orders.map((o) => (o.id === orderId || o.serverId === orderId ? updatedOrder : o)),
+          latestPlacedOrder: s.latestPlacedOrder?.id === orderId || s.latestPlacedOrder?.serverId === orderId ? updatedOrder : s.latestPlacedOrder,
+        }));
+
+        void pushLocalOrderSync(updatedOrder);
+        void pushCloudOrder(updatedOrder);
+
+        return updatedOrder;
       },
 
       updateOrderStatus: (orderId, status) => {
@@ -202,6 +253,23 @@ export const useOrderStore = create<OrderState>()(
               ? null
               : state.latestPlacedOrder,
         }));
+
+        // Persist deletion to local sync, cloud store, and dismissed IDs
+        void pushLocalOrderSync({
+          action: 'delete',
+          orderId,
+          order_no: orderId,
+          deleted: true,
+          status: 'Cancelled',
+        });
+        void deleteCloudOrder(orderId);
+
+        try {
+          const raw = localStorage.getItem('brokole-dismissed-orders');
+          const parsed = raw ? JSON.parse(raw) : {};
+          parsed[orderId] = Date.now();
+          localStorage.setItem('brokole-dismissed-orders', JSON.stringify(parsed));
+        } catch {}
       },
 
       clearLatestPlacedOrder: () => {
@@ -471,10 +539,32 @@ export const useOrderStore = create<OrderState>()(
             }
           }
 
+          let dismissedSet = new Set<string>();
+          try {
+            const rawDismissed = localStorage.getItem('brokole-dismissed-orders');
+            if (rawDismissed) {
+              dismissedSet = new Set(Object.keys(JSON.parse(rawDismissed)));
+            }
+          } catch {}
+
           // 4. Server orders (highest priority for official server state)
           for (const o of serverOrders) {
             const key = o.id || o.serverId;
             if (key) map.set(key, o);
+          }
+
+          // 5. Remove any deleted or dismissed orders
+          for (const [key, ord] of map.entries()) {
+            if (ord.deleted || (ord as any).deleted === true) {
+              map.delete(key);
+              continue;
+            }
+            if (dismissedSet.has(key) || (ord.id && dismissedSet.has(ord.id)) || (ord.serverId && dismissedSet.has(ord.serverId))) {
+              // Dismissed/deleted locally - check if cancelled or remove
+              if (ord.status === 'Cancelled' || (ord as any).deleted) {
+                map.delete(key);
+              }
+            }
           }
 
           const combined = Array.from(map.values()).sort(

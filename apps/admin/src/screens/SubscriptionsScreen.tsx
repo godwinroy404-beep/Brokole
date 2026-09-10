@@ -8,7 +8,7 @@ import {
 import { toast } from 'sonner';
 import {
   formatINR, ORDER_STATUS_LABELS, type Order, type OrderStatus,
-  fetchCloudOrders, updateCloudOrderStatus,
+  fetchCloudOrders, updateCloudOrderStatus, deleteCloudOrder,
 } from '@brokole/domain';
 import { api, isApiConfigured } from '../lib/api';
 import type { AdminSession } from '../lib/useSession';
@@ -263,6 +263,12 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(updated));
     } catch { /* ignore */ }
 
+    // Purge from cloud sync and broadcast deletion
+    void deleteCloudOrder(orderId);
+    if (orderNo && orderNo !== orderId) {
+      void deleteCloudOrder(orderNo);
+    }
+
     try {
       await fetch('/api/local-orders-sync', {
         method: 'POST',
@@ -316,6 +322,11 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       const subId = targetOrder.id || targetOrder.order_no;
       const orderNo = targetOrder.order_no || subId;
       const custName = (targetOrder as any)?.customer_name || (targetOrder as any)?.customerName || '';
+
+      void deleteCloudOrder(subId);
+      if (orderNo && orderNo !== subId) {
+        void deleteCloudOrder(orderNo);
+      }
 
       try {
         await fetch('/api/local-orders-sync', {
@@ -507,6 +518,8 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
     return orders.filter((order) => {
       const orderId = order.id || order.order_no;
       if (dismissedSubIds.includes(orderId)) return false;
+      if ((order as any).deleted) return false;
+      if (order.status === 'cancelled' || order.status === 'refunded') return false;
 
       const isSub = (order as any).channel === 'subscription' ||
         order.order_no.startsWith('BKL-SUB-') ||

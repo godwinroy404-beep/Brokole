@@ -36,6 +36,8 @@ import {
   Lock,
   PauseCircle,
   TrendingUp,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -159,7 +161,7 @@ const SUBSCRIPTION_PLANS: PlanTier[] = [
 export const SubscriptionPlans: React.FC = () => {
   const navigate = useNavigate();
   const { user, isLoggedIn, openAuthModal, updateUser } = useAuthStore();
-  const { orders, addOrder, loadMyOrders } = useOrderStore();
+  const { orders, addOrder, loadMyOrders, extendSubscriptionOrder } = useOrderStore();
   const upsertCustomer = useCustomerStore((state) => state.upsertCustomer);
   const setMacroProfile = useMacroStore((state) => state.setProfile);
   const macroProfile = useMacroStore((state) => state.profile);
@@ -205,6 +207,16 @@ export const SubscriptionPlans: React.FC = () => {
   const [activationGoalId, setActivationGoalId] = useState<string>('muscle_gain');
   const [activationDiet, setActivationDiet] = useState<string>('High Protein');
   const [activationSlot, setActivationSlot] = useState<string>('Lunch & Dinner (12 PM & 7 PM)');
+  const [activationMode, setActivationMode] = useState<'new' | 'switch' | 'extend'>('new');
+
+  // Plan Warning / Decision Modal State (for Extend or Switch)
+  const [planWarningModal, setPlanWarningModal] = useState<{
+    isOpen: boolean;
+    type: 'extend' | 'switch';
+    plan: PlanTier;
+    cycle: 'tomorrow' | 'weekly' | 'monthly';
+    activeSub: any;
+  } | null>(null);
   
   // Checkout Form Details in Modal
   const [custName, setCustName] = useState(user?.name || '');
@@ -272,6 +284,7 @@ export const SubscriptionPlans: React.FC = () => {
   // Check if current user has an active subscription
   const activeSubOrder = useMemo(() => {
     return orders.find((o) => {
+      if ((o as any).deleted) return false;
       const st = (o.status || '').toLowerCase();
       if (st.includes('cancel') || st.includes('refund')) return false;
       const isSub =
@@ -291,13 +304,18 @@ export const SubscriptionPlans: React.FC = () => {
   }, [orders]);
 
   // Open the Subscription Activation Popup Modal
-  const handleOpenSubscribeModal = (plan: PlanTier, cycleOverride?: 'tomorrow' | 'weekly' | 'monthly') => {
+  const handleOpenSubscribeModal = (
+    plan: PlanTier,
+    cycleOverride?: 'tomorrow' | 'weekly' | 'monthly',
+    mode: 'new' | 'switch' | 'extend' = 'new'
+  ) => {
     const cycle = cycleOverride || billingCycle;
     setSelectedPlanForActivation(plan);
     setActivationCycle(cycle);
     setActivationDiet(selectedDiet);
     setActivationSlot(cycle === 'tomorrow' ? tomorrowSlot : selectedSlot);
     setActivationGoalId(macroProfile.goal || (plan.id === 'plan-shred-gain' ? 'muscle_gain' : 'weight_loss'));
+    setActivationMode(mode);
     if (user) {
       setCustName(user.name || '');
       setCustPhone(user.phone || '');
@@ -306,7 +324,69 @@ export const SubscriptionPlans: React.FC = () => {
     setIsActivationModalOpen(true);
   };
 
-  // Confirm and directly activate the subscription (NO BASKET ROUTING)
+  // Intercept subscription clicks to warn existing subscribers and offer Extend or Switch
+  const handlePlanButtonClick = (plan: PlanTier, cycleOverride?: 'tomorrow' | 'weekly' | 'monthly') => {
+    const cycle = cycleOverride || billingCycle;
+
+    if (!activeSubOrder) {
+      handleOpenSubscribeModal(plan, cycle, 'new');
+      return;
+    }
+
+    const activeSummary = (
+      activeSubOrder.itemsSummary ||
+      (activeSubOrder.itemsList && activeSubOrder.itemsList[0]?.title) ||
+      ''
+    ).toLowerCase();
+    const planNameLower = plan.name.toLowerCase();
+
+    // Determine if the user is selecting the same plan tier
+    const isSamePlan =
+      (planNameLower.includes('weekly flex') && activeSummary.includes('weekly flex')) ||
+      (planNameLower.includes('shred & gain') && activeSummary.includes('shred & gain')) ||
+      (planNameLower.includes('athlete') && activeSummary.includes('athlete')) ||
+      activeSummary.includes(planNameLower);
+
+    if (isSamePlan) {
+      // User has SAME plan active -> prompt with Extension option
+      setPlanWarningModal({
+        isOpen: true,
+        type: 'extend',
+        plan,
+        cycle,
+        activeSub: activeSubOrder,
+      });
+    } else {
+      // User is selecting a DIFFERENT plan -> prompt with Switch Plan option
+      setPlanWarningModal({
+        isOpen: true,
+        type: 'switch',
+        plan,
+        cycle,
+        activeSub: activeSubOrder,
+      });
+    }
+  };
+
+  // Quick 1-click Extension Handler
+  const handleConfirmExtension = async (plan: PlanTier, cycle: 'tomorrow' | 'weekly' | 'monthly') => {
+    if (!activeSubOrder) return;
+    const addedDays = cycle === 'monthly' ? 30 : cycle === 'tomorrow' ? 1 : 7;
+    const price = cycle === 'monthly' ? plan.monthlyPrice : cycle === 'tomorrow' ? plan.tomorrowPrice : plan.weeklyPrice;
+    const updatedSummary = `Brokole ${plan.name} (+${addedDays} Days Extended)`;
+
+    extendSubscriptionOrder(activeSubOrder.id, addedDays, price, updatedSummary);
+
+    toast.success(`🎉 Subscription Extended (+${addedDays} Days)!`, {
+      description: `Added ${addedDays} delivery days to your active ${plan.name} schedule.`,
+      duration: 5000,
+    });
+
+    setPlanWarningModal(null);
+    navigate({ to: '/account' });
+  };
+
+  // Confirm and directly activate the subscription (NO BASKET ROUTING, NO DUPLICATE CREATION)
   const handleConfirmAndActivate = async () => {
     if (!selectedPlanForActivation) return;
 
@@ -356,13 +436,19 @@ export const SubscriptionPlans: React.FC = () => {
         spentAmount: price,
       });
 
+      // If switching plans, gracefully cancel/deactivate previous active subscription
+      if ((activationMode === 'switch' || activationMode === 'new') && activeSubOrder) {
+        useOrderStore.getState().updateOrderStatus(activeSubOrder.id, 'Cancelled');
+      }
+
       const subOrderNo = `BKL-SUB-${Math.floor(100 + Math.random() * 900)}`;
       const subTitle = `Brokole ${plan.name} (${durationLabel})`;
       const subNotes = `${goal.label} Goal Plan | ${activationDiet} | ${activationSlot}`;
 
-      // Create live order
-      const newOrder = addOrder({
-        id: subOrderNo as any,
+      // Create single live order cleanly through addOrder (which syncs locally and to cloud once)
+      addOrder({
+        id: subOrderNo,
+        serverId: subOrderNo,
         userId: user?.id || `usr-${Date.now()}`,
         userEmail: user?.email || `${custName.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
         customerName: custName,
@@ -376,48 +462,36 @@ export const SubscriptionPlans: React.FC = () => {
             price,
           },
         ],
+        lines: [
+          {
+            name_snapshot: subTitle,
+            quantity: 1,
+            unit_price: String(price),
+            line_total: String(price),
+            notes: goal.label,
+          },
+        ],
         totalAmount: price,
         proteinGrams: plan.proteinPerDay,
         calories: plan.caloriesPerDay,
+        channel: 'subscription',
+        notes: subNotes,
         status: 'Preparing',
       });
 
-      const fullOrderPayload = {
-        id: subOrderNo,
-        order_no: subOrderNo,
-        serverId: subOrderNo,
-        userId: user?.id || `usr-${Date.now()}`,
-        userEmail: user?.email || `${custName.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
-        customerName: custName,
-        customer_name: custName,
-        customerPhone: custPhone,
-        customerAddress: custAddress,
-        itemsSummary: subTitle,
-        itemsList: [{ title: subTitle, quantity: 1, price }],
-        lines: [{ name_snapshot: subTitle, quantity: 1, unit_price: String(price), line_total: String(price), notes: goal.label }],
-        totalAmount: price,
-        total: price,
-        proteinGrams: plan.proteinPerDay,
-        calories: plan.caloriesPerDay,
-        status: 'placed',
-        channel: 'subscription',
-        notes: subNotes,
-        skipped_days: [],
-        createdAt: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-      };
-
-      // Push to local disk sync & multi-cloud store in real time
-      void pushLocalOrderSync(fullOrderPayload);
-      void pushCloudOrder(fullOrderPayload);
-
-      toast.success(`🎉 ${plan.name} Activated Successfully!`, {
-        description: `Order #${subOrderNo} confirmed. View your active meal calendar & skip days in your account.`,
-        duration: 5000,
-      });
+      toast.success(
+        activationMode === 'switch'
+          ? `🎉 Switched to ${plan.name} Successfully!`
+          : `🎉 ${plan.name} Activated Successfully!`,
+        {
+          description: `Order #${subOrderNo} confirmed. View your active meal calendar & skip days in your account.`,
+          duration: 5000,
+        }
+      );
 
       setIsActivationModalOpen(false);
       setSelectedPlanForActivation(null);
+      setActivationMode('new');
 
       // Navigate to Account page with calendar active
       navigate({ to: '/account' });
@@ -758,7 +832,7 @@ export const SubscriptionPlans: React.FC = () => {
                       'Hot & fresh dietitian-formulated meal',
                     ],
                   };
-                  handleOpenSubscribeModal(fallbackPlan, 'tomorrow');
+                  handlePlanButtonClick(fallbackPlan, 'tomorrow');
                 }}
                 className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text-on-accent)] font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.99] carved-btn shrink-0"
               >
@@ -983,10 +1057,10 @@ export const SubscriptionPlans: React.FC = () => {
 
               </div>
 
-              {/* Action Button - Opens Direct Activation Popup (NO BASKET) */}
+              {/* Action Button - Intercepts to handle Extend/Switch Warning or Open Activation Modal */}
               <div className="pt-6 border-t border-[var(--color-border-subtle)] mt-6">
                 <button
-                  onClick={() => handleOpenSubscribeModal(plan)}
+                  onClick={() => handlePlanButtonClick(plan, billingCycle)}
                   className={`w-full py-4 px-4 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn ${
                     isTomorrow || plan.popular
                       ? 'bg-[var(--color-accent)] text-[var(--color-text-on-accent)] hover:bg-[var(--color-accent-hover)]'
@@ -1035,6 +1109,190 @@ export const SubscriptionPlans: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ⚠️ PLAN WARNING & DECISION MODAL (EXTEND VS SWITCH) */}
+      {planWarningModal && planWarningModal.isOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fade-in">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl relative space-y-5 animate-scale-in carved-box">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-[var(--color-border-subtle)] pb-4">
+              <div className="space-y-1.5">
+                {planWarningModal.type === 'extend' ? (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black uppercase">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-700 animate-pulse" />
+                    <span>Active Subscription Detected</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 text-purple-900 border border-purple-300 text-xs font-black uppercase">
+                    <RefreshCw className="w-3.5 h-3.5 text-purple-700 animate-spin" />
+                    <span>Switch Subscription Plan</span>
+                  </div>
+                )}
+                <h3 className="text-lg sm:text-xl font-black text-[var(--color-text-main)] tracking-tight">
+                  {planWarningModal.type === 'extend'
+                    ? 'Extend Your Active Subscription?'
+                    : `Switch to ${planWarningModal.plan.name}?`}
+                </h3>
+                <p className="text-xs text-[var(--color-text-muted)] font-medium leading-relaxed">
+                  {planWarningModal.type === 'extend'
+                    ? `You already have an active subscription for ${planWarningModal.activeSub.itemsSummary || planWarningModal.plan.name}. Do you want to extend your plan and add days to your existing schedule?`
+                    : `You currently have an active ${planWarningModal.activeSub.itemsSummary || 'VIP'} subscription. Would you like to switch your schedule to ${planWarningModal.plan.name}?`}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPlanWarningModal(null)}
+                className="p-2 rounded-2xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-all cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Current Active Plan Status Card */}
+            <div className="bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-2xl p-4 space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[var(--color-primary)] block">
+                Currently Active on Your Account:
+              </span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-extrabold text-[var(--color-text-main)] block">
+                    {planWarningModal.activeSub.itemsSummary || 'Brokole Meal Plan'}
+                  </span>
+                  <span className="text-xs text-[var(--color-text-muted)] font-semibold">
+                    Order #{planWarningModal.activeSub.id} • {planWarningModal.activeSub.proteinGrams || 75}g Protein / Day
+                  </span>
+                </div>
+                <span className="px-2.5 py-1 rounded-xl bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
+                  ACTIVE VIP
+                </span>
+              </div>
+            </div>
+
+            {/* Content for Extension Mode */}
+            {planWarningModal.type === 'extend' ? (
+              <div className="space-y-4">
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 space-y-2 text-xs">
+                  <div className="flex items-center justify-between font-bold text-emerald-950">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-emerald-700" />
+                      <span>Extension Duration:</span>
+                    </span>
+                    <span className="font-black text-emerald-800 text-sm">
+                      +{planWarningModal.cycle === 'monthly' ? '30 Days' : planWarningModal.cycle === 'tomorrow' ? '1 Day' : '7 Days'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between font-bold text-emerald-950 pt-1 border-t border-emerald-500/20">
+                    <span>Extension Amount:</span>
+                    <span className="font-black text-emerald-900 text-sm">
+                      {formatCurrency(
+                        planWarningModal.cycle === 'monthly'
+                          ? planWarningModal.plan.monthlyPrice
+                          : planWarningModal.cycle === 'tomorrow'
+                          ? planWarningModal.plan.tomorrowPrice
+                          : planWarningModal.plan.weeklyPrice
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800/90 font-medium pt-1">
+                    ✨ Extends your active meal schedule without creating duplicate orders or interrupting existing delivery days.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmExtension(planWarningModal.plan, planWarningModal.cycle)}
+                    className="flex-1 py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
+                  >
+                    <TrendingUp className="w-4 h-4" />
+                    <span>
+                      Extend Subscription (+
+                      {planWarningModal.cycle === 'monthly' ? '30 Days' : planWarningModal.cycle === 'tomorrow' ? '1 Day' : '7 Days'})
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const plan = planWarningModal.plan;
+                      const cycle = planWarningModal.cycle;
+                      setPlanWarningModal(null);
+                      handleOpenSubscribeModal(plan, cycle, 'switch');
+                    }}
+                    className="py-3 px-4 rounded-2xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text-main)] font-extrabold text-xs hover:bg-[var(--color-surface)] transition-all cursor-pointer text-center carved-btn"
+                  >
+                    Start Fresh / Replace
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Content for Plan Switch Mode */
+              <div className="space-y-4">
+                <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 space-y-2 text-xs text-neutral-700">
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="text-purple-950 font-extrabold flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-purple-700" />
+                      <span>New Target Plan:</span>
+                    </span>
+                    <span className="font-black text-purple-900 text-sm">
+                      {planWarningModal.plan.name}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-purple-200">
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-purple-100">
+                      <span className="text-[10px] text-neutral-500 font-bold block">Daily Protein:</span>
+                      <span className="text-xs font-black text-emerald-700">{planWarningModal.plan.proteinPerDay}g / Day</span>
+                    </div>
+                    <div className="bg-white/80 p-2.5 rounded-xl border border-purple-100">
+                      <span className="text-[10px] text-neutral-500 font-bold block">Plan Price:</span>
+                      <span className="text-xs font-black text-purple-950">
+                        {formatCurrency(
+                          planWarningModal.cycle === 'monthly'
+                            ? planWarningModal.plan.monthlyPrice
+                            : planWarningModal.cycle === 'tomorrow'
+                            ? planWarningModal.plan.tomorrowPrice
+                            : planWarningModal.plan.weeklyPrice
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-purple-900 font-medium pt-1">
+                    🔄 Switching plans will automatically archive your previous subscription and activate your new {planWarningModal.plan.name} schedule.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const plan = planWarningModal.plan;
+                      const cycle = planWarningModal.cycle;
+                      setPlanWarningModal(null);
+                      handleOpenSubscribeModal(plan, cycle, 'switch');
+                    }}
+                    className="flex-1 py-3.5 px-4 rounded-2xl bg-purple-700 hover:bg-purple-600 text-white font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md carved-btn"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Switch to {planWarningModal.plan.name}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPlanWarningModal(null)}
+                    className="py-3 px-4 rounded-2xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text-muted)] font-extrabold text-xs hover:text-[var(--color-text-main)] transition-all cursor-pointer text-center"
+                  >
+                    Keep Current Plan
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
       {/* 🚀 RESPONSIVE SUBSCRIPTION ACTIVATION POPUP MODAL (CONSTRAINED TO VIEWPORT, NO BASKET) */}
       {isActivationModalOpen && selectedPlanForActivation && (

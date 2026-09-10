@@ -70,6 +70,7 @@ function AccountPage() {
 
   const filteredOrderHistory = useMemo(() => {
     return orders.filter((o) => {
+      if ((o as any).deleted) return false;
       const q = orderSearchQuery.toLowerCase().trim();
       const summaryText = (o.itemsSummary || '').toLowerCase();
       const listText = (o.itemsList || []).map((i) => i.title.toLowerCase()).join(' ');
@@ -441,6 +442,7 @@ function AccountPage() {
   const subOrder = orders.find(
     (o) =>
       !isCancelled(o.status) &&
+      !(o as any).deleted &&
       ((o.itemsSummary && (
         o.itemsSummary.toLowerCase().includes('subscription') ||
         o.itemsSummary.toLowerCase().includes('plan') ||
@@ -467,6 +469,7 @@ function AccountPage() {
   const isVipCustomer = orders.some(
     (o) =>
       !isCancelled(o.status) &&
+      !(o as any).deleted &&
       (((o.itemsSummary && (
         o.itemsSummary.toLowerCase().includes('subscription') ||
         o.itemsSummary.toLowerCase().includes('plan') ||

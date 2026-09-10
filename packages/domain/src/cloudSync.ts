@@ -330,6 +330,64 @@ export async function updateCloudOrderStatus(orderId: string, newStatus: string)
 }
 
 /**
+ * Deletes or cancels an order globally across memory, local sync, and cloud bin.
+ */
+export async function deleteCloudOrder(orderId: string): Promise<void> {
+  const targetId = String(orderId).toLowerCase();
+
+  // 1. Remove/mark deleted in memory cache
+  memoryOrdersCache = memoryOrdersCache.filter(
+    (o) => String(o.id).toLowerCase() !== targetId && String(o.order_no).toLowerCase() !== targetId
+  );
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('brokole-cloud-orders-cache', JSON.stringify(memoryOrdersCache));
+    }
+  } catch {}
+
+  // 2. Post deletion to local sync endpoint
+  try {
+    await fetch('/api/local-orders-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', orderId, order_no: orderId }),
+    }).catch(() => {});
+  } catch {}
+
+  // 3. Update cloud store
+  try {
+    let cloudOrders: CloudOrderPayload[] = [];
+    const res = await fetch(`${CLOUD_ORDERS_BIN}?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache, no-store' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.orders)) {
+        cloudOrders = data.orders.filter(
+          (o: any) => String(o.id).toLowerCase() !== targetId && String(o.order_no).toLowerCase() !== targetId
+        );
+      }
+    }
+
+    await fetch(CLOUD_ORDERS_BIN, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: cloudOrders }),
+    });
+  } catch {}
+
+  // 4. Broadcast deletion event
+  try {
+    syncChannel?.postMessage({ type: 'ORDER_DELETED', orderId });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('bkl-orders-updated', { detail: { orderId, deleted: true } }));
+    }
+  } catch {}
+}
+
+/**
  * Global Power Bowl Customization Sync
  */
 export async function fetchCloudPowerBowl(): Promise<any[]> {
