@@ -1424,31 +1424,54 @@ export const SubscriptionPlans: React.FC = () => {
                   <label className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)] block">
                     Dietary Focus
                   </label>
-                  <select
-                    value={activationDiet}
-                    onChange={(e) => setActivationDiet(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                  >
-                    <option value="High Protein">High Protein</option>
-                    <option value="Keto / Low Carb">Keto / Low Carb</option>
-                    <option value="Pure Vegan">Pure Vegan</option>
-                    <option value="Balanced Fit">Balanced Fit</option>
-                  </select>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {['High Protein', 'Keto / Low Carb', 'Pure Vegan', 'Balanced Fit'].map((diet) => {
+                      const isSelected = activationDiet === diet;
+                      return (
+                        <button
+                          key={diet}
+                          type="button"
+                          onClick={() => setActivationDiet(diet)}
+                          className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-extrabold text-left transition-all cursor-pointer truncate ${
+                            isSelected
+                              ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)]'
+                              : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary-muted)]'
+                          }`}
+                        >
+                          {diet}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)] block">
                     Delivery Slot
                   </label>
-                  <select
-                    value={activationSlot}
-                    onChange={(e) => setActivationSlot(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-main)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
-                  >
-                    <option value="Lunch & Dinner (12 PM & 7 PM)">Lunch & Dinner (12 PM & 7 PM)</option>
-                    <option value="Morning & Evening (8 AM & 6 PM)">Morning & Evening (8 AM & 6 PM)</option>
-                    <option value="All-Day 3-Meal Dispatch (8 AM, 1 PM, 7 PM)">All-Day 3-Meal Dispatch</option>
-                  </select>
+                  <div className="space-y-1.5">
+                    {[
+                      { id: 'Lunch & Dinner (12 PM & 7 PM)', label: 'Lunch & Dinner (12 PM & 7 PM)' },
+                      { id: 'Morning & Evening (8 AM & 6 PM)', label: 'Morning & Evening (8 AM & 6 PM)' },
+                      { id: 'All-Day 3-Meal Dispatch (8 AM, 1 PM, 7 PM)', label: '3-Meal All-Day Dispatch' },
+                    ].map((slot) => {
+                      const isSelected = activationSlot === slot.id;
+                      return (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          onClick={() => setActivationSlot(slot.id)}
+                          className={`w-full px-2.5 py-1.5 rounded-xl border text-[11px] font-extrabold text-left transition-all cursor-pointer truncate ${
+                            isSelected
+                              ? 'bg-[var(--color-primary-light)] border-[var(--color-primary)] text-[var(--color-primary)]'
+                              : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary-muted)]'
+                          }`}
+                        >
+                          {slot.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 

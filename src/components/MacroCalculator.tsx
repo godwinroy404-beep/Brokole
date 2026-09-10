@@ -1,9 +1,28 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useMacroStore } from '../store/useMacroStore';
-import { Activity, Dumbbell, Flame, Scale, Sparkles, Target, ShieldCheck } from 'lucide-react';
+import { Activity, Dumbbell, Flame, Scale, Sparkles, Target, ShieldCheck, ChevronDown, Check } from 'lucide-react';
+
+const ACTIVITY_OPTIONS = [
+  { id: 'sedentary', label: 'Sedentary (Desk Job)' },
+  { id: 'moderate', label: 'Moderately Active (3-4 workouts/wk)' },
+  { id: 'active', label: 'Active (5+ workouts/wk)' },
+  { id: 'very_active', label: 'Very Active (Athlete/Physical Job)' },
+];
 
 export const MacroCalculator: React.FC = () => {
   const { profile, calculated, setProfile, isGoalSet, setAsGoal } = useMacroStore();
+  const [isActivityOpen, setIsActivityOpen] = useState(false);
+  const activityRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (activityRef.current && !activityRef.current.contains(event.target as Node)) {
+        setIsActivityOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-3xl p-5 sm:p-7 shadow-card my-6 carved-box">
@@ -103,14 +122,30 @@ export const MacroCalculator: React.FC = () => {
               <label className="block text-xs font-semibold text-[var(--color-text-muted)] mb-1">
                 Gender
               </label>
-              <select
-                value={profile.gender}
-                onChange={(e) => setProfile({ gender: e.target.value as any })}
-                className="w-full px-3.5 py-2.5 bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-2xl text-sm font-extrabold text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-border-focus)] shadow-xs"
-              >
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setProfile({ gender: 'male' })}
+                  className={`py-2 px-3 rounded-2xl border text-xs font-extrabold transition-all cursor-pointer carved-btn ${
+                    profile.gender === 'male'
+                      ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] border-[var(--color-primary)] shadow-xs'
+                      : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:border-[var(--color-primary-muted)]'
+                  }`}
+                >
+                  Male
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProfile({ gender: 'female' })}
+                  className={`py-2 px-3 rounded-2xl border text-xs font-extrabold transition-all cursor-pointer carved-btn ${
+                    profile.gender === 'female'
+                      ? 'bg-[var(--color-primary)] text-[var(--color-text-on-primary)] border-[var(--color-primary)] shadow-xs'
+                      : 'bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:border-[var(--color-primary-muted)]'
+                  }`}
+                >
+                  Female
+                </button>
+              </div>
             </div>
           </div>
 
@@ -119,16 +154,42 @@ export const MacroCalculator: React.FC = () => {
             <label className="block text-xs font-semibold text-[var(--color-text-muted)] mb-1">
               Daily Activity Level
             </label>
-            <select
-              value={profile.activityLevel}
-              onChange={(e) => setProfile({ activityLevel: e.target.value as any })}
-              className="w-full px-3.5 py-2.5 bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-2xl text-sm font-extrabold text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-border-focus)] shadow-xs"
-            >
-              <option value="sedentary">Sedentary (Desk Job)</option>
-              <option value="moderate">Moderately Active (3-4 workouts/wk)</option>
-              <option value="active">Active (5+ workouts/wk)</option>
-              <option value="very_active">Very Active (Athlete/Physical Job)</option>
-            </select>
+            <div className="relative" ref={activityRef}>
+              <button
+                type="button"
+                onClick={() => setIsActivityOpen(!isActivityOpen)}
+                className="w-full px-3.5 py-2.5 bg-[var(--color-surface-hover)] border border-[var(--color-border)] hover:border-[var(--color-primary-muted)] rounded-2xl text-xs font-extrabold text-[var(--color-text-main)] flex items-center justify-between gap-2 shadow-xs transition-all cursor-pointer carved-btn"
+              >
+                <span className="truncate">{ACTIVITY_OPTIONS.find((a) => a.id === profile.activityLevel)?.label || 'Select Activity'}</span>
+                <ChevronDown className={`w-4 h-4 text-[var(--color-text-muted)] shrink-0 transition-transform duration-200 ${isActivityOpen ? 'rotate-180 text-[var(--color-primary)]' : ''}`} />
+              </button>
+
+              {isActivityOpen && (
+                <div className="absolute left-0 top-full mt-2 w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 carved-box">
+                  {ACTIVITY_OPTIONS.map((opt) => {
+                    const isSelected = profile.activityLevel === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setProfile({ activityLevel: opt.id as any });
+                          setIsActivityOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                          isSelected
+                            ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)] font-extrabold'
+                            : 'text-[var(--color-text-main)] hover:bg-[var(--color-surface-hover)]'
+                        }`}
+                      >
+                        <span>{opt.label}</span>
+                        {isSelected && <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
         </div>

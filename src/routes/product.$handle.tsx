@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate, notFound } from '@tanstack/react-router';
 import { fetchProductByHandle, ProductVariant } from '../lib/shopify';
 import { NutritionLabel } from '../components/NutritionLabel';
 import { formatCurrency } from '../lib/nutritionParser';
@@ -11,7 +11,7 @@ export const Route = createFileRoute('/product/$handle')({
   loader: async ({ params }) => {
     const product = await fetchProductByHandle(params.handle);
     if (!product) {
-      throw new Error(`Product ${params.handle} not found`);
+      throw notFound();
     }
     return { product };
   },
