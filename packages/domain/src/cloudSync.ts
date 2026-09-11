@@ -42,16 +42,33 @@ try {
   }
 } catch {}
 
+let inFlightFetchPromise: Promise<CloudOrderPayload[]> | null = null;
+
+/**
+ * Returns a canonical key string to reliably match an order across any data source.
+ */
+export function getCanonicalCloudKey(o: any): string {
+  if (!o) return '';
+  const orderNo = String(o.order_no || '').trim().toLowerCase();
+  const id = String(o.id || '').trim().toLowerCase();
+  const serverId = String(o.serverId || '').trim().toLowerCase();
+  return orderNo || id || serverId || '';
+}
+
 /**
  * Normalizes an order record into a unified shape.
  */
 export function normalizeCloudOrder(o: any): CloudOrderPayload {
-  const id = String(o.id || o.order_no || o.serverId || `ORD-${Date.now()}`);
+  const existingKey = String(o.id || o.order_no || o.serverId || '');
+  const id = existingKey || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+  const order_no = String(o.order_no || o.id || id);
+  const serverId = String(o.serverId || o.id || id);
+
   const itemsSummary = o.itemsSummary || (o.lines ? o.lines.map((l: any) => l.name_snapshot || l.title).join(', ') : 'Healthy Meals');
   const isSubscription =
     o.channel === 'subscription' ||
     id.toLowerCase().includes('sub') ||
-    String(o.order_no || '').toLowerCase().includes('sub') ||
+    order_no.toLowerCase().includes('sub') ||
     itemsSummary.toLowerCase().includes('plan') ||
     itemsSummary.toLowerCase().includes('subscription') ||
     itemsSummary.toLowerCase().includes('weekly') ||
@@ -60,8 +77,8 @@ export function normalizeCloudOrder(o: any): CloudOrderPayload {
 
   return {
     id,
-    order_no: o.order_no || o.id || id,
-    serverId: o.serverId || id,
+    order_no,
+    serverId,
     userId: o.userId || o.customer_id || '',
     userEmail: o.userEmail || o.email || '',
     customerName: o.customerName || o.customer_name || 'Customer',
@@ -87,75 +104,158 @@ export function normalizeCloudOrder(o: any): CloudOrderPayload {
 }
 
 /**
- * Fetches all orders from the global cloud sync store with strict cache-busting.
+ * Fetches all orders from the global cloud sync store with deduplicated in-flight requests and multi-tier merging.
  */
 export async function fetchCloudOrders(): Promise<CloudOrderPayload[]> {
-  // 1. First attempt to fetch from native serverless / local sync endpoint
-  try {
-    const res = await fetch(`/api/local-orders-sync?_t=${Date.now()}`, {
-      method: 'GET',
-      headers: { 'Cache-Control': 'no-cache' },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data?.orders) && data.orders.length > 0) {
-        memoryOrdersCache = data.orders.map(normalizeCloudOrder);
-        try {
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('brokole-cloud-orders-cache', JSON.stringify(memoryOrdersCache));
-          }
-        } catch {}
-        return memoryOrdersCache;
-      }
-    }
-  } catch {}
-
-  // 2. Secondary attempt to fetch from global cloud bin
-  try {
-    const url = `${CLOUD_ORDERS_BIN}?_t=${Date.now()}`;
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-      },
-    });
-
-    if (res.ok) {
-      const text = await res.text();
-      let data: any = {};
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = {};
-      }
-
-      if (Array.isArray(data?.orders) && data.orders.length > 0) {
-        memoryOrdersCache = data.orders.map(normalizeCloudOrder);
-        try {
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('brokole-cloud-orders-cache', JSON.stringify(memoryOrdersCache));
-          }
-        } catch {}
-        return memoryOrdersCache;
-      }
-    }
-  } catch (err) {
-    console.warn('Cloud sync fetch error:', err);
+  if (inFlightFetchPromise) {
+    return inFlightFetchPromise;
   }
 
-  // 3. Fallback to local cache if offline
-  try {
-    if (typeof localStorage !== 'undefined') {
-      const cached = localStorage.getItem('brokole-cloud-orders-cache');
-      if (cached) {
-        memoryOrdersCache = JSON.parse(cached);
-        return memoryOrdersCache;
-      }
-    }
-  } catch {}
+  inFlightFetchPromise = (async () => {
+    try {
+      // 1. Concurrently fetch cloud bin (authoritative persistent store) and local/serverless sync endpoint
+      const [cloudResResult, localResResult] = await Promise.allSettled([
+        fetch(`${CLOUD_ORDERS_BIN}?_t=${Date.now()}`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          },
+        }),
+        fetch(`/api/local-orders-sync?_t=${Date.now()}`, {
+          method: 'GET',
+          headers: { 'Cache-Control': 'no-cache' },
+        }),
+      ]);
 
-  return memoryOrdersCache;
+      const fetchedList: CloudOrderPayload[] = [];
+
+      // Process Cloud Bin result
+      if (cloudResResult.status === 'fulfilled' && cloudResResult.value.ok) {
+        try {
+          const text = await cloudResResult.value.text();
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed?.orders)) {
+            fetchedList.push(...parsed.orders.map(normalizeCloudOrder));
+          }
+        } catch {}
+      }
+
+      // Process Local / Serverless sync result
+      if (localResResult.status === 'fulfilled' && localResResult.value.ok) {
+        try {
+          const data = await localResResult.value.json();
+          if (Array.isArray(data?.orders)) {
+            fetchedList.push(...data.orders.map(normalizeCloudOrder));
+          }
+        } catch {}
+      }
+
+      // 2. Read local fallback storage if network returned nothing
+      if (fetchedList.length === 0 && typeof localStorage !== 'undefined') {
+        try {
+          const cached = localStorage.getItem('brokole-cloud-orders-cache');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed)) {
+              fetchedList.push(...parsed.map(normalizeCloudOrder));
+            }
+          }
+        } catch {}
+      }
+
+      let dismissedSet = new Set<string>();
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const rawDismissed = localStorage.getItem('brokole-dismissed-orders');
+          if (rawDismissed) {
+            Object.keys(JSON.parse(rawDismissed)).forEach((id) => dismissedSet.add(String(id).trim().toLowerCase()));
+          }
+          const rawSubDismissed = localStorage.getItem('bkl_dismissed_sub_ids');
+          if (rawSubDismissed) {
+            const parsed = JSON.parse(rawSubDismissed);
+            if (Array.isArray(parsed)) parsed.forEach((id) => dismissedSet.add(String(id).trim().toLowerCase()));
+          }
+        }
+      } catch {}
+
+      // 3. Robust canonical-key merging with memoryOrdersCache
+      const orderMap = new Map<string, CloudOrderPayload>();
+
+      const isInvalidOrDismissed = (o: any) => {
+        if (!o || o.deleted || (o as any).deleted === true) return true;
+        const st = String(o.status || '').trim().toLowerCase();
+        if (st === 'cancelled' || st === 'canceled' || st === 'refunded') return true;
+        const k = getCanonicalCloudKey(o);
+        const idLower = String(o.id || '').trim().toLowerCase();
+        const noLower = String(o.order_no || '').trim().toLowerCase();
+        const serverLower = String(o.serverId || '').trim().toLowerCase();
+        if (dismissedSet.has(k) || (idLower && dismissedSet.has(idLower)) || (noLower && dismissedSet.has(noLower)) || (serverLower && dismissedSet.has(serverLower))) {
+          return true;
+        }
+        return false;
+      };
+
+      // Index existing cache first (excluding any invalid/deleted/cancelled)
+      for (const o of memoryOrdersCache) {
+        if (isInvalidOrDismissed(o)) continue;
+        const k = getCanonicalCloudKey(o);
+        if (k) orderMap.set(k, o);
+      }
+
+      // Merge newly fetched orders (they take priority over stale memory cache)
+      for (const o of fetchedList) {
+        if (!o) continue;
+        const k = getCanonicalCloudKey(o);
+        if (!k) continue;
+
+        if (isInvalidOrDismissed(o)) {
+          orderMap.delete(k);
+          const idLower = String(o.id || '').trim().toLowerCase();
+          const noLower = String(o.order_no || '').trim().toLowerCase();
+          const serverLower = String(o.serverId || '').trim().toLowerCase();
+          if (idLower) orderMap.delete(idLower);
+          if (noLower) orderMap.delete(noLower);
+          if (serverLower) orderMap.delete(serverLower);
+          continue;
+        }
+
+        const existing = orderMap.get(k);
+        if (existing) {
+          orderMap.set(k, {
+            ...existing,
+            ...o,
+            // Preserve rich lines/items if incoming order is a summary
+            lines: (o.lines && o.lines.length > 0) ? o.lines : existing.lines,
+            itemsList: (o.itemsList && o.itemsList.length > 0) ? o.itemsList : existing.itemsList,
+          });
+        } else {
+          orderMap.set(k, o);
+        }
+      }
+
+      const merged = Array.from(orderMap.values()).sort(
+        (a, b) => new Date(b.placed_at || b.createdAt || 0).getTime() - new Date(a.placed_at || a.createdAt || 0).getTime()
+      );
+
+      memoryOrdersCache = merged;
+
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('brokole-cloud-orders-cache', JSON.stringify(merged));
+        }
+      } catch {}
+
+      return merged;
+    } catch (err) {
+      console.warn('fetchCloudOrders error:', err);
+      return memoryOrdersCache;
+    } finally {
+      inFlightFetchPromise = null;
+    }
+  })();
+
+  return inFlightFetchPromise;
 }
 
 /**
@@ -163,10 +263,11 @@ export async function fetchCloudOrders(): Promise<CloudOrderPayload[]> {
  */
 export async function pushCloudOrder(order: any): Promise<void> {
   const norm = normalizeCloudOrder(order);
+  const targetKey = getCanonicalCloudKey(norm);
 
   // Optimistic memory update with merging
   const existingIdx = memoryOrdersCache.findIndex(
-    (o) => o.id === norm.id || (norm.order_no && o.order_no === norm.order_no)
+    (o) => getCanonicalCloudKey(o) === targetKey
   );
 
   if (existingIdx >= 0) {
@@ -201,7 +302,7 @@ export async function pushCloudOrder(order: any): Promise<void> {
 
   // Push to Global Cloud Store
   try {
-    let currentOrders = [...memoryOrdersCache];
+    const map = new Map<string, CloudOrderPayload>();
     try {
       const freshRes = await fetch(`${CLOUD_ORDERS_BIN}?_t=${Date.now()}`, {
         method: 'GET',
@@ -211,22 +312,28 @@ export async function pushCloudOrder(order: any): Promise<void> {
         const text = await freshRes.text();
         const freshData = JSON.parse(text);
         if (Array.isArray(freshData?.orders)) {
-          const freshNormalized = freshData.orders.map(normalizeCloudOrder);
-          const map = new Map<string, CloudOrderPayload>();
-          freshNormalized.forEach((o: CloudOrderPayload) => map.set(o.id, o));
-          memoryOrdersCache.forEach((o: CloudOrderPayload) => {
-            const ex = map.get(o.id);
-            map.set(o.id, ex ? { ...ex, ...o } : o);
+          freshData.orders.forEach((rawOrd: any) => {
+            const o = normalizeCloudOrder(rawOrd);
+            const k = getCanonicalCloudKey(o);
+            if (k && !o.deleted) map.set(k, o);
           });
-          const ex = map.get(norm.id);
-          map.set(norm.id, ex ? { ...ex, ...norm } : norm);
-
-          currentOrders = Array.from(map.values()).sort(
-            (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-          );
         }
       }
     } catch {}
+
+    memoryOrdersCache.forEach((o) => {
+      const k = getCanonicalCloudKey(o);
+      if (k && !o.deleted) {
+        const ex = map.get(k);
+        map.set(k, ex ? { ...ex, ...o } : o);
+      }
+    });
+
+    map.set(targetKey, norm);
+
+    const currentOrders = Array.from(map.values()).sort(
+      (a, b) => new Date(b.placed_at || b.createdAt || 0).getTime() - new Date(a.placed_at || a.createdAt || 0).getTime()
+    );
 
     await fetch(CLOUD_ORDERS_BIN, {
       method: 'PUT',
@@ -244,20 +351,18 @@ export async function pushCloudOrder(order: any): Promise<void> {
  * Updates an order status across all devices globally without losing any order data.
  */
 export async function updateCloudOrderStatus(orderId: string, newStatus: string): Promise<void> {
-  const targetId = String(orderId).toLowerCase();
+  const targetKey = String(orderId).trim().toLowerCase();
 
   // 1. Update memory cache
-  let targetFound: CloudOrderPayload | null = null;
   memoryOrdersCache = memoryOrdersCache.map((o) => {
-    if (String(o.id).toLowerCase() === targetId || String(o.order_no).toLowerCase() === targetId) {
-      targetFound = { ...o, status: newStatus };
-      return targetFound;
+    if (getCanonicalCloudKey(o) === targetKey) {
+      return { ...o, status: newStatus };
     }
     return o;
   });
 
   // 2. Fetch fresh cloud orders and merge
-  let cloudOrders: CloudOrderPayload[] = [];
+  const map = new Map<string, CloudOrderPayload>();
   try {
     const res = await fetch(`${CLOUD_ORDERS_BIN}?_t=${Date.now()}`, {
       method: 'GET',
@@ -266,24 +371,27 @@ export async function updateCloudOrderStatus(orderId: string, newStatus: string)
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data?.orders)) {
-        cloudOrders = data.orders.map(normalizeCloudOrder);
+        data.orders.forEach((rawOrd: any) => {
+          const o = normalizeCloudOrder(rawOrd);
+          const k = getCanonicalCloudKey(o);
+          if (k && !o.deleted) map.set(k, o);
+        });
       }
     }
   } catch {}
 
-  const map = new Map<string, CloudOrderPayload>();
-  for (const o of cloudOrders) {
-    map.set(o.id, o);
-  }
   for (const o of memoryOrdersCache) {
-    const existing = map.get(o.id);
-    map.set(o.id, existing ? { ...existing, ...o } : o);
+    const k = getCanonicalCloudKey(o);
+    if (k && !o.deleted) {
+      const existing = map.get(k);
+      map.set(k, existing ? { ...existing, ...o } : o);
+    }
   }
 
   // Update target in map
   let matched = false;
   for (const [k, o] of map.entries()) {
-    if (String(o.id).toLowerCase() === targetId || String(o.order_no).toLowerCase() === targetId) {
+    if (k === targetKey || getCanonicalCloudKey(o) === targetKey) {
       map.set(k, { ...o, status: newStatus });
       matched = true;
       break;
@@ -291,7 +399,7 @@ export async function updateCloudOrderStatus(orderId: string, newStatus: string)
   }
 
   if (!matched) {
-    map.set(orderId, {
+    map.set(targetKey, {
       id: orderId,
       order_no: orderId,
       status: newStatus,
@@ -300,10 +408,16 @@ export async function updateCloudOrderStatus(orderId: string, newStatus: string)
   }
 
   const finalOrders = Array.from(map.values()).sort(
-    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    (a, b) => new Date(b.placed_at || b.createdAt || 0).getTime() - new Date(a.placed_at || a.createdAt || 0).getTime()
   );
 
   memoryOrdersCache = finalOrders;
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('brokole-cloud-orders-cache', JSON.stringify(finalOrders));
+    }
+  } catch {}
 
   try {
     await fetch('/api/local-orders-sync', {
@@ -333,11 +447,11 @@ export async function updateCloudOrderStatus(orderId: string, newStatus: string)
  * Deletes or cancels an order globally across memory, local sync, and cloud bin.
  */
 export async function deleteCloudOrder(orderId: string): Promise<void> {
-  const targetId = String(orderId).toLowerCase();
+  const targetKey = String(orderId).trim().toLowerCase();
 
   // 1. Remove/mark deleted in memory cache
   memoryOrdersCache = memoryOrdersCache.filter(
-    (o) => String(o.id).toLowerCase() !== targetId && String(o.order_no).toLowerCase() !== targetId
+    (o) => getCanonicalCloudKey(o) !== targetKey
   );
 
   try {
@@ -365,9 +479,9 @@ export async function deleteCloudOrder(orderId: string): Promise<void> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data?.orders)) {
-        cloudOrders = data.orders.filter(
-          (o: any) => String(o.id).toLowerCase() !== targetId && String(o.order_no).toLowerCase() !== targetId
-        );
+        cloudOrders = data.orders
+          .map(normalizeCloudOrder)
+          .filter((o: any) => getCanonicalCloudKey(o) !== targetKey);
       }
     }
 

@@ -76,22 +76,36 @@ export function AppShell({ session }: { session: AdminSession }) {
         }
       } catch {}
 
-      // 2. Merge cloud orders
+      // 2. Merge cloud orders with canonical key deduplication
+      const map = new Map<string, any>();
+      const getCanonKey = (o: any) => {
+        const no = String(o?.order_no || '').trim().toLowerCase();
+        const id = String(o?.id || '').trim().toLowerCase();
+        const sId = String(o?.serverId || '').trim().toLowerCase();
+        return no || id || sId || '';
+      };
+
+      allOrders.forEach((o) => {
+        const k = getCanonKey(o);
+        if (k && !o.deleted) map.set(k, o);
+      });
+
       try {
         const cloudData = await fetchCloudOrders();
-          const map = new Map<string, any>();
-          allOrders.forEach((o) => {
-            const key = String(o.id || o.order_no || '');
-            if (key) map.set(key, o);
-          });
-          cloudData.forEach((o) => {
-            const key = String(o.id || o.order_no || '');
-            if (!o.deleted && key) {
-              map.set(key, { ...map.get(key), ...o });
+        cloudData.forEach((o) => {
+          const k = getCanonKey(o);
+          if (k) {
+            if (o.deleted) {
+              map.delete(k);
+            } else {
+              const ex = map.get(k);
+              map.set(k, ex ? { ...ex, ...o } : o);
             }
-          });
-          allOrders = Array.from(map.values());
+          }
+        });
       } catch {}
+
+      const unifiedOrders = Array.from(map.values());
 
       const isSub = (o: any) =>
         o.channel === 'subscription' ||
@@ -105,7 +119,7 @@ export function AppShell({ session }: { session: AdminSession }) {
       let skippedCount = 0;
       let subCount = 0;
 
-      for (const o of allOrders) {
+      for (const o of unifiedOrders) {
         const st = String(o.status || '').toLowerCase();
         if (st === 'cancelled' || st === 'canceled' || st === 'refunded' || o.deleted) continue;
 
@@ -130,11 +144,21 @@ export function AppShell({ session }: { session: AdminSession }) {
         }
       }
 
-      setStats({
-        newOrders: newCount,
-        activeOrders: activeCount,
-        skippedToday: skippedCount,
-        activeSubscriptions: subCount,
+      setStats((prev) => {
+        if (
+          prev.newOrders === newCount &&
+          prev.activeOrders === activeCount &&
+          prev.skippedToday === skippedCount &&
+          prev.activeSubscriptions === subCount
+        ) {
+          return prev;
+        }
+        return {
+          newOrders: newCount,
+          activeOrders: activeCount,
+          skippedToday: skippedCount,
+          activeSubscriptions: subCount,
+        };
       });
     } catch {
       /* ignore */

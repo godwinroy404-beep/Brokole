@@ -431,32 +431,45 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
     const localStoreOrders = getLocalStorageOrders();
 
     const orderMap = new Map<string, Order>();
+    const getSubKey = (o: any) => {
+      const no = String(o?.order_no || '').trim().toLowerCase();
+      const id = String(o?.id || '').trim().toLowerCase();
+      const sId = String(o?.serverId || '').trim().toLowerCase();
+      return no || id || sId || '';
+    };
+
+    const mergeSub = (o: Order) => {
+      const k = getSubKey(o);
+      if (!k) return;
+      const ex = orderMap.get(k);
+      orderMap.set(k, ex ? { ...ex, ...o } : o);
+    };
 
     // Fallbacks first
     for (const o of getFallbackSubscriptionOrders()) {
-      orderMap.set(o.id || o.order_no, o);
+      mergeSub(o);
     }
     // Local storage
     for (const o of localStoreOrders) {
-      orderMap.set(o.id || o.order_no, o);
+      mergeSub(o);
     }
     // Disk sync
     for (const o of diskOrders) {
-      orderMap.set(o.id || o.order_no, o);
+      mergeSub(o);
     }
     // Cloud sync (high priority across all devices)
     for (const o of cloudOrders) {
-      orderMap.set(o.id || o.order_no, o);
+      mergeSub(o);
     }
     // API orders (highest priority)
     for (const o of apiOrders) {
-      orderMap.set(o.id || o.order_no, o);
+      mergeSub(o);
     }
 
     const newOrders = Array.from(orderMap.values());
     setOrders((prev) => {
-      const prevSig = prev.map((o) => `${o.id}:${o.status}`).join('|');
-      const nextSig = newOrders.map((o) => `${o.id}:${o.status}`).join('|');
+      const prevSig = prev.map((o) => `${o.id}:${o.order_no}:${o.status}:${o.total}`).join('|');
+      const nextSig = newOrders.map((o) => `${o.id}:${o.order_no}:${o.status}:${o.total}`).join('|');
       if (prevSig === nextSig) return prev;
       return newOrders;
     });

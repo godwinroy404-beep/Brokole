@@ -70,10 +70,16 @@ export function SalesReportScreen({ session }: { session: AdminSession }) {
       /* ignore */
     }
 
-    // Deduplicate by ID
+    // Deduplicate by ID and exclude deleted / cancelled orders
     const uniqueMap = new Map<string, any>();
     combined.forEach((o) => {
-      const key = o.id || o.order_no || o.serverId;
+      if (!o || o.deleted || (o as any).deleted === true) return;
+      const st = String(o.status || '').trim().toLowerCase();
+      if (st === 'cancelled' || st === 'canceled' || st === 'refunded') return;
+      const no = String(o.order_no || '').trim().toLowerCase();
+      const id = String(o.id || '').trim().toLowerCase();
+      const sId = String(o.serverId || '').trim().toLowerCase();
+      const key = no || id || sId;
       if (key && !uniqueMap.has(key)) {
         uniqueMap.set(key, o);
       }

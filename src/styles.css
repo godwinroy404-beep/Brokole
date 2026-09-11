@@ -83,15 +83,17 @@
 
 /* Glassmorphism helpers using semantic tokens */
 .glass-header {
-  background-color: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background-color: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.04);
 }
 
 .glass-nav {
-  background-color: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background-color: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 -2px 12px 0 rgba(0, 0, 0, 0.06);
 }
 
 /* Carved corner box styling utility */
