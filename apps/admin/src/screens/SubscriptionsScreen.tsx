@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   RefreshCw, Loader2, Calendar, Sparkles, Award, ShoppingBag, CheckCircle2,
   AlertTriangle, PauseCircle, Target, Users, Search, Filter, Clock,
@@ -64,7 +64,180 @@ function formatSkippedDaysText(orderSkippedDays: (string | number)[], weekDays: 
   return [...new Set(formatted)].join(', ');
 }
 
+function getCanonicalOrderKey(o: any): string {
+  if (!o) return '';
+  const orderNo = String(o.order_no || '').trim().toLowerCase();
+  const id = String(o.id || '').trim().toLowerCase();
+  const serverId = String(o.serverId || '').trim().toLowerCase();
+  return orderNo || id || serverId || '';
+}
+
+function isSubOrder(order: any): boolean {
+  if (!order) return false;
+  const itemsSummary = String(order.itemsSummary || '').toLowerCase();
+  const notes = String(order.notes || '').toLowerCase();
+  const id = String(order.id || '').toLowerCase();
+  const orderNo = String(order.order_no || '').toLowerCase();
+
+  return (
+    order.channel === 'subscription' ||
+    id.includes('sub') ||
+    orderNo.includes('sub') ||
+    notes.includes('plan') ||
+    notes.includes('subscription') ||
+    notes.includes('weekly') ||
+    notes.includes('monthly') ||
+    notes.includes('pre-order') ||
+    notes.includes('pre-booked') ||
+    notes.includes('shred') ||
+    itemsSummary.includes('plan') ||
+    itemsSummary.includes('subscription') ||
+    itemsSummary.includes('weekly') ||
+    itemsSummary.includes('monthly') ||
+    itemsSummary.includes('shred') ||
+    (order.lines && order.lines.some((l: any) => {
+      const name = String(l.name_snapshot || l.title || '').toLowerCase();
+      return (
+        name.includes('plan') ||
+        name.includes('subscription') ||
+        name.includes('weekly') ||
+        name.includes('monthly') ||
+        name.includes('pre-order') ||
+        name.includes('pre-booked') ||
+        name.includes('shred & gain') ||
+        name.includes('shred')
+      );
+    }))
+  );
+}
+
+function computeSubSignature(orderList: Order[]): string {
+  return orderList
+    .map((o) => `${o.id}::${o.order_no}::${o.status}::${o.total}::${o.notes || ''}::${(o as any).skipped_days?.length || 0}`)
+    .join('|||');
+}
+
+function getDismissedSet(): Set<string> {
+  const set = new Set<string>();
+  try {
+    const subDismissed = localStorage.getItem('bkl_dismissed_sub_ids');
+    if (subDismissed) {
+      const parsed = JSON.parse(subDismissed);
+      if (Array.isArray(parsed)) parsed.forEach((id) => set.add(String(id).trim().toLowerCase()));
+    }
+    const ordDismissed = localStorage.getItem('brokole-dismissed-orders');
+    if (ordDismissed) {
+      const parsed = JSON.parse(ordDismissed);
+      Object.keys(parsed).forEach((id) => set.add(String(id).trim().toLowerCase()));
+    }
+  } catch {}
+  return set;
+}
+
+function mergeOrderIntoMap(map: Map<string, Order>, raw: any, dismissedSet: Set<string>) {
+  if (!raw) return;
+
+  const rawOrderNo = String(raw.order_no || raw.id || '').trim();
+  const rawId = String(raw.id || raw.serverId || rawOrderNo).trim();
+  const rawServerId = String(raw.serverId || rawId).trim();
+
+  const idLower = rawId.toLowerCase();
+  const noLower = rawOrderNo.toLowerCase();
+  const serverLower = rawServerId.toLowerCase();
+
+  const stRaw = String(raw.status || '').trim().toLowerCase();
+  const isCancelledOrDeleted =
+    Boolean(raw.deleted) ||
+    (raw as any).deleted === true ||
+    dismissedSet.has(idLower) ||
+    dismissedSet.has(noLower) ||
+    dismissedSet.has(serverLower) ||
+    stRaw === 'cancelled' ||
+    stRaw === 'canceled' ||
+    stRaw === 'refunded';
+
+  if (isCancelledOrDeleted) {
+    if (noLower) map.delete(noLower);
+    if (idLower) map.delete(idLower);
+    if (serverLower) map.delete(serverLower);
+    return;
+  }
+
+  // Must be a subscription order
+  if (!isSubOrder(raw)) {
+    return;
+  }
+
+  let st = stRaw;
+  if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
+  else if (st === 'accepted') st = 'accepted';
+  else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
+  else if (st === 'packed') st = 'packed';
+  else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
+  else if (st === 'delivered') st = 'delivered';
+  else st = 'placed';
+
+  const matchKey = [noLower, idLower, serverLower].find((k) => k && map.has(k));
+  const existing = matchKey ? map.get(matchKey) : undefined;
+
+  const canonicalKey = matchKey || noLower || idLower || serverLower;
+  if (!canonicalKey) return;
+
+  const totalVal = Number(raw.totalAmount || raw.total || (existing ? existing.total : 1899));
+  const subtotalVal = raw.subtotal !== undefined ? Number(raw.subtotal) : (raw.totalAmount ? Math.round(Number(raw.totalAmount) * 0.95) : Math.round(totalVal * 0.95));
+  const taxVal = raw.tax_amount !== undefined ? Number(raw.tax_amount) : (raw.totalAmount ? Math.round(Number(raw.totalAmount) * 0.05) : Math.round(totalVal * 0.05));
+
+  const rawLines = raw.lines || raw.itemsList || [];
+  const parsedLines = rawLines.length > 0
+    ? rawLines.map((item: any) => ({
+        name_snapshot: item.name_snapshot || item.title || 'Brokole Meal Subscription Plan',
+        quantity: item.quantity || 1,
+        unit_price: String(item.price || item.unit_price || totalVal),
+        line_total: String((item.price || item.unit_price || totalVal) * (item.quantity || 1)),
+        notes: item.notes,
+      }))
+    : (existing?.lines || [{
+        name_snapshot: raw.itemsSummary || 'Brokole Meal Subscription Plan',
+        quantity: 1,
+        unit_price: String(totalVal),
+        line_total: String(totalVal),
+      }]);
+
+  const mergedOrder: Order = {
+    id: existing?.id || rawId,
+    order_no: existing?.order_no || rawOrderNo,
+    status: st as OrderStatus,
+    channel: 'subscription',
+    business_date: raw.business_date || existing?.business_date || new Date(raw.createdAt || raw.created_at || Date.now()).toISOString().split('T')[0],
+    subtotal: subtotalVal,
+    tax_amount: taxVal,
+    delivery_fee: 0,
+    total: totalVal,
+    total_calories: Number(raw.calories || raw.total_calories || (existing ? existing.total_calories : 550)),
+    total_protein: Number(raw.proteinGrams || raw.total_protein || (existing ? existing.total_protein : 48)),
+    customer_id: raw.userId || raw.customer_id || (existing ? existing.customer_id : 'usr-demo'),
+    placed_at: raw.placed_at || raw.createdAt || raw.created_at || (existing ? existing.placed_at : new Date().toISOString()),
+    created_at: raw.createdAt || raw.created_at || raw.placed_at || (existing ? existing.created_at : new Date().toISOString()),
+    notes: raw.notes || (existing ? existing.notes : (raw.itemsSummary || 'Daily Goal Plan')),
+    lines: parsedLines,
+    customer_name: raw.customer_name || raw.customerName || (existing as any)?.customer_name || 'VIP Member',
+    phone: raw.customerPhone || raw.phone || (existing as any)?.phone || '+91 98765 43210',
+    skipped_days: raw.skipped_days || (existing as any)?.skipped_days || [],
+  } as any;
+
+  map.set(canonicalKey, mergedOrder);
+}
+
 function getFallbackSubscriptionOrders(): Order[] {
+  try {
+    const raw = localStorage.getItem('brokole-orders-storage');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const storeOrders = parsed?.state?.orders;
+    if (Array.isArray(storeOrders)) {
+      return storeOrders;
+    }
+  } catch {}
   return [];
 }
 
@@ -74,45 +247,7 @@ async function fetchDiskOrders(): Promise<Order[]> {
     if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data?.orders) || data.orders.length === 0) return [];
-
-    return data.orders.map((o: any) => {
-      let st = (o.status || '').toLowerCase();
-      if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
-      else if (st === 'accepted') st = 'accepted';
-      else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
-      else if (st === 'packed') st = 'packed';
-      else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
-      else if (st === 'delivered') st = 'delivered';
-      else if (st === 'cancelled' || st === 'canceled' || st === 'refunded') st = 'cancelled';
-      else st = 'placed';
-
-      return {
-        id: o.serverId || o.id,
-        order_no: o.id || o.order_no || 'BKL-SUB-001',
-        status: st as OrderStatus,
-        channel: o.channel || 'online',
-        business_date: new Date(o.createdAt || o.created_at || Date.now()).toISOString().split('T')[0],
-        subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : o.total ? Math.round(Number(o.total) * 0.95) : 380,
-        tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : o.total ? Math.round(Number(o.total) * 0.05) : 19,
-        delivery_fee: 0,
-        total: o.totalAmount || Number(o.total) || 399,
-        total_calories: o.calories || o.total_calories || 550,
-        total_protein: o.proteinGrams || o.total_protein || 48,
-        customer_id: o.userId || 'usr-demo',
-        placed_at: o.createdAt || o.created_at || new Date().toISOString(),
-        created_at: o.createdAt || o.created_at || new Date().toISOString(),
-        notes: o.notes || o.itemsSummary || '',
-        lines: (o.itemsList || o.lines || []).map((item: any) => ({
-          name_snapshot: item.title || item.name_snapshot || 'Chef Crafted Meal',
-          quantity: item.quantity || 1,
-          unit_price: String(item.price || item.unit_price || 0),
-          line_total: String((item.price || item.unit_price || 0) * (item.quantity || 1)),
-        })),
-        customer_name: o.customerName || o.customer_name || 'Valued Customer',
-        phone: o.customerPhone || o.phone || '+91 98765 43210',
-        skipped_days: o.skipped_days || [],
-      };
-    });
+    return data.orders;
   } catch {
     return [];
   }
@@ -124,61 +259,26 @@ function getLocalStorageOrders(): Order[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     const storeOrders = parsed?.state?.orders;
-    if (!Array.isArray(storeOrders) || storeOrders.length === 0) return [];
-    return storeOrders.map((o: any) => {
-      let st = (o.status || '').toLowerCase();
-      if (st === 'delivered') st = 'delivered';
-      else if (st === 'cancelled' || st === 'canceled') st = 'cancelled';
-      else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
-      else if (st === 'packed') st = 'packed';
-      else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
-      else if (st === 'accepted') st = 'accepted';
-      else st = 'placed';
-
-      const itemsSummary = o.itemsSummary || o.notes || 'Chef Crafted Meal';
-
-      return {
-        id: o.serverId || o.id,
-        order_no: o.id || 'BKL-SUB-001',
-        status: st as OrderStatus,
-        channel: o.channel || (itemsSummary.toLowerCase().includes('plan') || itemsSummary.toLowerCase().includes('subscription') || itemsSummary.toLowerCase().includes('weekly') || itemsSummary.toLowerCase().includes('shred') ? 'subscription' : 'online'),
-        business_date: new Date(o.createdAt || Date.now()).toISOString().split('T')[0],
-        subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : 380,
-        tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : 19,
-        delivery_fee: 0,
-        total: o.totalAmount || 399,
-        total_calories: o.calories || 550,
-        total_protein: o.proteinGrams || 48,
-        customer_id: o.userId || 'usr-demo',
-        placed_at: o.createdAt || new Date().toISOString(),
-        created_at: o.createdAt || new Date().toISOString(),
-        notes: o.notes || itemsSummary || '',
-        lines: (o.itemsList || []).length > 0 ? (o.itemsList.map((item: any) => ({
-          name_snapshot: item.title || 'Chef Crafted Meal',
-          quantity: item.quantity || 1,
-          unit_price: String(item.price || 0),
-          line_total: String((item.price || 0) * (item.quantity || 1)),
-        }))) : [{
-          name_snapshot: itemsSummary,
-          quantity: 1,
-          unit_price: String(o.totalAmount || 399),
-          line_total: String(o.totalAmount || 399),
-        }],
-        customer_name: o.customerName || 'r roy',
-        phone: o.customerPhone || '+91 98765 43210',
-        skipped_days: o.skipped_days || [],
-      };
-    });
-  } catch {
-    return [];
-  }
+    if (Array.isArray(storeOrders)) return storeOrders;
+  } catch {}
+  return [];
 }
 
 export function SubscriptionsScreen({ session }: { session: AdminSession }) {
-  const [orders, setOrders] = useState<Order[]>(() => getFallbackSubscriptionOrders());
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const map = new Map<string, Order>();
+    const dismissed = getDismissedSet();
+    for (const raw of getFallbackSubscriptionOrders()) {
+      mergeOrderIntoMap(map, raw, dismissed);
+    }
+    return Array.from(map.values());
+  });
+
   const [activeTab, setActiveTab] = useState<'cards' | 'roster'>('cards');
   const [searchQuery, setSearchQuery] = useState('');
   const [planFilter, setPlanFilter] = useState<'all' | '30days' | '7days' | 'skipped'>('all');
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const [liveSkippedDates, setLiveSkippedDates] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('bkl_skipped_dates');
@@ -187,33 +287,168 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
       return [];
     }
   });
-  const [dismissedSubIds, setDismissedSubIds] = useState<string[]>([]);
-  const handleSyncLiveSubscriptions = async () => {
-    setDismissedSubIds([]);
+
+  const fetchSeqRef = useRef(0);
+
+  const updateSkippedDatesIfChanged = useCallback((newDates: string[]) => {
+    setLiveSkippedDates((prev) => {
+      if (prev.length === newDates.length && prev.every((d, i) => d === newDates[i])) {
+        return prev;
+      }
+      return newDates;
+    });
+  }, []);
+
+  const fetchOrders = useCallback(async (isManual = false) => {
+    const currentSeq = ++fetchSeqRef.current;
+    if (isManual) setIsSyncing(true);
+
+    const dismissedSet = getDismissedSet();
+    const orderMap = new Map<string, Order>();
+
+    // 1. Fallback base orders from local storage
+    for (const o of getFallbackSubscriptionOrders()) {
+      mergeOrderIntoMap(orderMap, o, dismissedSet);
+    }
+
+    // 2. Disk sync orders
+    const disk = await fetchDiskOrders();
+    for (const o of disk) {
+      mergeOrderIntoMap(orderMap, o, dismissedSet);
+    }
+
+    // 3. Global cloud orders (authoritative cross-device sync)
     try {
-      localStorage.removeItem('bkl_dismissed_sub_ids');
-    } catch { /* ignore */ }
-    await fetchOrders();
-    toast.success('Live subscriptions synced & restored!');
+      const cloudData = await fetchCloudOrders();
+      if (Array.isArray(cloudData) && cloudData.length > 0) {
+        for (const o of cloudData) {
+          mergeOrderIntoMap(orderMap, o, dismissedSet);
+        }
+      }
+    } catch {}
+
+    // 4. Server API orders (highest priority if configured)
+    if (isApiConfigured) {
+      try {
+        const { orders: serverOrders } = await api.get<{ orders: Order[] }>('/orders');
+        if (serverOrders && serverOrders.length > 0) {
+          for (const o of serverOrders) {
+            mergeOrderIntoMap(orderMap, o, dismissedSet);
+          }
+        }
+      } catch {}
+    }
+
+    if (currentSeq !== fetchSeqRef.current) {
+      return;
+    }
+
+    const loaded = Array.from(orderMap.values()).sort((a, b) => {
+      const timeA = new Date(a.placed_at || a.created_at || 0).getTime();
+      const timeB = new Date(b.placed_at || b.created_at || 0).getTime();
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+      return String(b.order_no || b.id).localeCompare(String(a.order_no || a.id));
+    });
+
+    setOrders((prev) => {
+      const prevSig = computeSubSignature(prev);
+      const nextSig = computeSubSignature(loaded);
+      if (prevSig === nextSig) {
+        return prev;
+      }
+      return loaded;
+    });
+
+    try {
+      const saved = localStorage.getItem('bkl_skipped_dates');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) updateSkippedDatesIfChanged(parsed);
+      }
+    } catch {}
+
+    if (isManual) setIsSyncing(false);
+  }, [updateSkippedDatesIfChanged]);
+
+  useEffect(() => {
+    void fetchOrders(false);
+  }, [fetchOrders]);
+
+  // Live real-time live polling every 2s + cross-tab BroadcastChannel for instant skip reflection
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('brokole-live-sync-channel');
+        bc.onmessage = (ev) => {
+          if (ev.data?.type === 'skips_updated' && Array.isArray(ev.data.dates)) {
+            updateSkippedDatesIfChanged(ev.data.dates);
+          }
+          void fetchOrders(false);
+        };
+      }
+    } catch {}
+
+    const handleStorageOrSkips = (e?: any) => {
+      try {
+        if (e?.detail && Array.isArray(e.detail)) {
+          updateSkippedDatesIfChanged(e.detail);
+        } else {
+          const saved = localStorage.getItem('bkl_skipped_dates');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) updateSkippedDatesIfChanged(parsed);
+          }
+        }
+      } catch {}
+      void fetchOrders(false);
+    };
+
+    window.addEventListener('storage', handleStorageOrSkips);
+    window.addEventListener('bkl-skips-updated', handleStorageOrSkips);
+    window.addEventListener('bkl-orders-updated', handleStorageOrSkips);
+
+    const tick = () => {
+      if (document.visibilityState === 'visible') void fetchOrders(false);
+    };
+    const interval = window.setInterval(tick, 2000);
+    document.addEventListener('visibilitychange', tick);
+
+    return () => {
+      bc?.close();
+      window.removeEventListener('storage', handleStorageOrSkips);
+      window.removeEventListener('bkl-skips-updated', handleStorageOrSkips);
+      window.removeEventListener('bkl-orders-updated', handleStorageOrSkips);
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [fetchOrders, updateSkippedDatesIfChanged]);
+
+  const handleSyncLiveSubscriptions = async () => {
+    await fetchOrders(true);
+    toast.success('Live subscriptions synced & refreshed!');
   };
 
   const handleAcceptSubscription = async (orderId: string) => {
+    const targetKey = String(orderId).trim().toLowerCase();
+
     setOrders((prev) =>
       prev.map((o) =>
-        (o.id === orderId || o.order_no === orderId)
+        getCanonicalOrderKey(o) === targetKey || String(o.id).toLowerCase() === targetKey || String(o.order_no).toLowerCase() === targetKey
           ? { ...o, status: 'accepted' as OrderStatus }
           : o
       )
     );
 
-    // Persist to local storage store so it stays accepted
     try {
       const raw = localStorage.getItem('brokole-orders-storage');
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed?.state?.orders)) {
           parsed.state.orders = parsed.state.orders.map((o: any) =>
-            o.id === orderId || o.serverId === orderId || o.order_no === orderId
+            getCanonicalOrderKey(o) === targetKey || String(o.id).toLowerCase() === targetKey || String(o.order_no).toLowerCase() === targetKey
               ? { ...o, status: 'accepted', isNew: false }
               : o
           );
@@ -252,16 +487,27 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
   };
 
   const handleDismissSubscription = async (orderId: string) => {
-    const targetOrder = orders.find((o) => o.id === orderId || o.order_no === orderId);
+    const targetKey = String(orderId).trim().toLowerCase();
+    const targetOrder = orders.find((o) => getCanonicalOrderKey(o) === targetKey || String(o.id).toLowerCase() === targetKey || String(o.order_no).toLowerCase() === targetKey);
     const orderNo = targetOrder?.order_no || orderId;
-    const custName = (targetOrder as any)?.customer_name || (targetOrder as any)?.customerName || '';
 
-    const updated = [...new Set([...dismissedSubIds, orderId, orderNo])];
-    setDismissedSubIds(updated);
-    setOrders((prev) => prev.filter((o) => o.id !== orderId && o.order_no !== orderId && o.order_no !== orderNo));
+    // Remove from state immediately
+    setOrders((prev) => prev.filter((o) => getCanonicalOrderKey(o) !== targetKey && String(o.id).toLowerCase() !== targetKey && String(o.order_no).toLowerCase() !== targetKey));
+
+    // Save to both dismissed storage keys
     try {
-      localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(updated));
-    } catch { /* ignore */ }
+      const subDismissed = localStorage.getItem('bkl_dismissed_sub_ids');
+      const parsedSub = subDismissed ? JSON.parse(subDismissed) : [];
+      const nextSub = [...new Set([...parsedSub, orderId, orderNo, targetKey])];
+      localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(nextSub));
+
+      const ordDismissed = localStorage.getItem('brokole-dismissed-orders');
+      const parsedOrd = ordDismissed ? JSON.parse(ordDismissed) : {};
+      parsedOrd[orderId] = Date.now();
+      parsedOrd[orderNo] = Date.now();
+      parsedOrd[targetKey] = Date.now();
+      localStorage.setItem('brokole-dismissed-orders', JSON.stringify(parsedOrd));
+    } catch {}
 
     // Purge from cloud sync and broadcast deletion
     void deleteCloudOrder(orderId);
@@ -274,24 +520,12 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'cancel',
-          orderId,
-          order_no: orderNo,
-          customer_name: custName,
-          order: { id: orderId, order_no: orderNo, customer_name: custName, status: 'Cancelled', deleted: true },
-        }),
-      });
-      await fetch('/api/local-orders-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
           action: 'delete',
           orderId,
           order_no: orderNo,
-          customer_name: custName,
         }),
       });
-    } catch { /* ignore */ }
+    } catch {}
 
     if (isApiConfigured) {
       try {
@@ -299,29 +533,45 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
         if (orderNo && orderNo !== orderId) {
           await api.patch(`/orders/${encodeURIComponent(orderNo)}/status`, { status: 'cancelled' }).catch(() => {});
         }
-      } catch { /* ignore */ }
+      } catch {}
     }
 
-    window.dispatchEvent(new Event('storage'));
-    window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+    try {
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('brokole-live-sync-channel');
+        bc.postMessage({ type: 'order_deleted', orderId, id: orderId, order_no: orderNo });
+        bc.postMessage({ type: 'order_status_updated', orderId, id: orderId, status: 'cancelled' });
+        bc.close();
+      }
+    } catch {}
 
     toast.success('Subscription deleted & removed from customer profile');
   };
 
   const handleClearAllSubscriptions = async () => {
-    const allSubIds = orders.map((o) => o.id || o.order_no);
-    const updated = [...new Set([...dismissedSubIds, ...allSubIds])];
-    setDismissedSubIds(updated);
+    if (!window.confirm('Are you sure you want to clear all active subscription cards?')) return;
+
+    const allSubIds = orders.map((o) => getCanonicalOrderKey(o));
     const targetOrders = [...orders];
     setOrders([]);
+
     try {
-      localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(updated));
-    } catch { /* ignore */ }
+      const subDismissed = localStorage.getItem('bkl_dismissed_sub_ids');
+      const parsedSub = subDismissed ? JSON.parse(subDismissed) : [];
+      const nextSub = [...new Set([...parsedSub, ...allSubIds])];
+      localStorage.setItem('bkl_dismissed_sub_ids', JSON.stringify(nextSub));
+
+      const ordDismissed = localStorage.getItem('brokole-dismissed-orders');
+      const parsedOrd = ordDismissed ? JSON.parse(ordDismissed) : {};
+      allSubIds.forEach((id) => { parsedOrd[id] = Date.now(); });
+      localStorage.setItem('brokole-dismissed-orders', JSON.stringify(parsedOrd));
+    } catch {}
 
     for (const targetOrder of targetOrders) {
       const subId = targetOrder.id || targetOrder.order_no;
       const orderNo = targetOrder.order_no || subId;
-      const custName = (targetOrder as any)?.customer_name || (targetOrder as any)?.customerName || '';
 
       void deleteCloudOrder(subId);
       if (orderNo && orderNo !== subId) {
@@ -333,147 +583,32 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            action: 'cancel',
-            orderId: subId,
-            order_no: orderNo,
-            customer_name: custName,
-            order: { id: subId, order_no: orderNo, customer_name: custName, status: 'Cancelled', deleted: true },
-          }),
-        });
-        await fetch('/api/local-orders-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
             action: 'delete',
             orderId: subId,
             order_no: orderNo,
-            customer_name: custName,
           }),
         });
-      } catch { /* ignore */ }
+      } catch {}
 
       if (isApiConfigured) {
         try {
           await api.patch(`/orders/${encodeURIComponent(subId)}/status`, { status: 'cancelled' });
-        } catch { /* ignore */ }
+        } catch {}
       }
     }
 
-    window.dispatchEvent(new Event('storage'));
-    window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
-
-    toast.success('All subscription cards cleared & removed from customer profiles');
-  };
-
-  const fetchOrders = useCallback(async () => {
-    let apiOrders: Order[] = [];
-    if (isApiConfigured) {
-      try {
-        const { orders: fetched } = await api.get<{ orders: Order[] }>('/orders');
-        if (fetched && fetched.length > 0) {
-          apiOrders = fetched;
-        }
-      } catch {
-        apiOrders = [];
-      }
-    }
-
-    let cloudOrders: Order[] = [];
     try {
-      const cloudData = await fetchCloudOrders();
-      if (Array.isArray(cloudData)) {
-        cloudOrders = cloudData
-          .filter((o) => !o.deleted)
-          .map((o) => {
-            let st = (o.status || '').toLowerCase();
-            if (st === 'new order' || st === 'placed' || st === 'paid') st = 'placed';
-            else if (st === 'accepted') st = 'accepted';
-            else if (st === 'in_kitchen' || st === 'in kitchen' || st === 'preparing') st = 'in_kitchen';
-            else if (st === 'packed') st = 'packed';
-            else if (st === 'out for delivery' || st === 'out_for_delivery') st = 'out_for_delivery';
-            else if (st === 'delivered') st = 'delivered';
-            else if (st === 'cancelled' || st === 'canceled' || st === 'refunded') st = 'cancelled';
-            else st = 'placed';
-
-            const itemsSummary = o.itemsSummary || o.notes || 'Meal Plan';
-
-            return {
-              id: o.serverId || o.id,
-              order_no: o.order_no || o.id || 'BKL-SUB-001',
-              status: st as OrderStatus,
-              channel: o.channel || (itemsSummary.toLowerCase().includes('plan') || itemsSummary.toLowerCase().includes('sub') || itemsSummary.toLowerCase().includes('weekly') || itemsSummary.toLowerCase().includes('shred') ? 'subscription' : 'online'),
-              business_date: new Date(o.createdAt || o.created_at || Date.now()).toISOString().split('T')[0],
-              subtotal: o.totalAmount ? Math.round(o.totalAmount * 0.95) : 1800,
-              tax_amount: o.totalAmount ? Math.round(o.totalAmount * 0.05) : 90,
-              delivery_fee: 0,
-              total: o.totalAmount || 1899,
-              total_calories: o.calories || 600,
-              total_protein: o.proteinGrams || 50,
-              customer_id: o.userId || 'usr-demo',
-              placed_at: o.createdAt || o.created_at || new Date().toISOString(),
-              created_at: o.createdAt || o.created_at || new Date().toISOString(),
-              notes: o.notes || itemsSummary,
-              lines: (o.itemsList || o.lines || []).map((item: any) => ({
-                name_snapshot: item.title || item.name_snapshot || 'Goal Meal Plan',
-                quantity: item.quantity || 1,
-                unit_price: String(item.price || item.unit_price || 0),
-                line_total: String((item.price || item.unit_price || 0) * (item.quantity || 1)),
-              })),
-              customer_name: o.customerName || o.customer_name || 'Customer',
-              phone: o.customerPhone || '+91 98765 43210',
-              skipped_days: [],
-            } as any;
-          });
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('bkl-orders-updated'));
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('brokole-live-sync-channel');
+        bc.postMessage({ type: 'ORDERS_CLEARED' });
+        bc.close();
       }
     } catch {}
 
-    const diskOrders = await fetchDiskOrders();
-    const localStoreOrders = getLocalStorageOrders();
-
-    const orderMap = new Map<string, Order>();
-    const getSubKey = (o: any) => {
-      const no = String(o?.order_no || '').trim().toLowerCase();
-      const id = String(o?.id || '').trim().toLowerCase();
-      const sId = String(o?.serverId || '').trim().toLowerCase();
-      return no || id || sId || '';
-    };
-
-    const mergeSub = (o: Order) => {
-      const k = getSubKey(o);
-      if (!k) return;
-      const ex = orderMap.get(k);
-      orderMap.set(k, ex ? { ...ex, ...o } : o);
-    };
-
-    // Fallbacks first
-    for (const o of getFallbackSubscriptionOrders()) {
-      mergeSub(o);
-    }
-    // Local storage
-    for (const o of localStoreOrders) {
-      mergeSub(o);
-    }
-    // Disk sync
-    for (const o of diskOrders) {
-      mergeSub(o);
-    }
-    // Cloud sync (high priority across all devices)
-    for (const o of cloudOrders) {
-      mergeSub(o);
-    }
-    // API orders (highest priority)
-    for (const o of apiOrders) {
-      mergeSub(o);
-    }
-
-    const newOrders = Array.from(orderMap.values());
-    setOrders((prev) => {
-      const prevSig = prev.map((o) => `${o.id}:${o.order_no}:${o.status}:${o.total}`).join('|');
-      const nextSig = newOrders.map((o) => `${o.id}:${o.order_no}:${o.status}:${o.total}`).join('|');
-      if (prevSig === nextSig) return prev;
-      return newOrders;
-    });
-  }, []);
+    toast.success('All subscription cards cleared & removed from customer profiles');
+  };
 
   useEffect(() => {
     void fetchOrders();
@@ -528,24 +663,15 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
 
   // Filter subscription orders specifically
   const subscriptionOrders = useMemo(() => {
+    const dismissed = getDismissedSet();
     return orders.filter((order) => {
       const orderId = order.id || order.order_no;
-      if (dismissedSubIds.includes(orderId)) return false;
+      if (orderId && dismissed.has(orderId.toLowerCase())) return false;
       if ((order as any).deleted) return false;
       if (order.status === 'cancelled' || order.status === 'refunded') return false;
-
-      const isSub = (order as any).channel === 'subscription' ||
-        order.order_no.startsWith('BKL-SUB-') ||
-        (order.lines && order.lines.some((l: any) =>
-          (l.name_snapshot || '').toLowerCase().includes('plan') ||
-          (l.name_snapshot || '').toLowerCase().includes('subscription') ||
-          (l.name_snapshot || '').toLowerCase().includes('weekly') ||
-          (l.name_snapshot || '').toLowerCase().includes('monthly') ||
-          (l.name_snapshot || '').toLowerCase().includes('shred & gain')
-        ));
-      return isSub;
+      return isSubOrder(order);
     });
-  }, [orders, dismissedSubIds]);
+  }, [orders]);
 
   const totalRevenue = subscriptionOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
   const activeCount = subscriptionOrders.filter((o) => o.status !== 'cancelled' && o.status !== 'refunded').length;
@@ -818,7 +944,7 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
 
                 return (
                   <div
-                    key={order.id}
+                    key={getCanonicalOrderKey(order) || order.id || order.order_no}
                     className="rounded-2xl border border-purple-200/90 bg-white p-5 shadow-xs hover:shadow-md transition-all space-y-4 relative overflow-hidden flex flex-col justify-between"
                   >
                     <div className="absolute top-0 right-0 w-2 h-full bg-purple-600" />
@@ -1016,7 +1142,7 @@ export function SubscriptionsScreen({ session }: { session: AdminSession }) {
                   const orderSkippedDays = liveSkippedDates;
 
                   return (
-                    <tr key={order.id} className="hover:bg-neutral-50/80 transition-colors">
+                    <tr key={getCanonicalOrderKey(order) || order.id || order.order_no} className="hover:bg-neutral-50/80 transition-colors">
                       <td className="px-4 py-3.5">
                         <span className="font-mono font-black text-neutral-900 text-xs block">{order.order_no}</span>
                         <span className="text-[10px] text-neutral-400 font-medium">{order.business_date}</span>
